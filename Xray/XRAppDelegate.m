@@ -15,26 +15,26 @@
 }
 
 - (void)simple:(CGRect)a {
-    NSLog(@"%@",NSStringFromCGRect(a));
-    NSLog(@"%@",NSStringFromCGRect(*&a));
     NSLog( @"%p %p %p", &self, &_cmd, &a );
+    NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)simple:(CGRect)a i:(int)i1 i:(int)i2 {
-    NSLog(@"%@",NSStringFromCGRect(a));
     NSLog( @"%p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)i:(int)i1 i:(int)i2 simple:(CGRect)a {
-    NSLog(@"%@",NSStringFromCGRect(a));
     NSLog( @"%p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
-    [Xtrace methodFilter:"set"];
+    //[Xtrace methodFilter:"set"];
     [Xtrace showArguments:YES];
+    //[Xtrace hideReturns:YES];
     [XRAppDelegate xtrace];
     [self simple];
     CGRect a = {{111,222},{333,444}};

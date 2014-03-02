@@ -77,7 +77,7 @@ static BOOL useTargets, includeProperties, hideReturns, showArguments;
 + (void)showArguments:(BOOL)show {
     showArguments = show;
 #ifndef ARGS_SUPPORTED
-    NSLog( @"Argument logging not possible under ARC or 64bits" );
+    NSLog( @"Argument logging not possible under ARC or in 64bit Apps" );
 #endif
 }
 
@@ -122,8 +122,8 @@ static std::map<Class,std::map<SEL,original> > originals;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
-    originals[metaClass];
-    originals[aClass];
+    originals[metaClass][_cmd];
+    originals[aClass][_cmd];
 }
 
 + (void)traceClass:(Class)aClass {
@@ -352,7 +352,7 @@ INTERCEPT(aimpl,CGAffineTransform)
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
     for ( int l=0 ; l<levels ; l++ ) {
-        if ( originals.find(aClass) == originals.end() ) {
+        if ( originals[aClass].size() == 0 ) {
             unsigned mc = 0;
             const char *className = class_getName(aClass);
             Method *methods = class_copyMethodList(aClass, &mc);

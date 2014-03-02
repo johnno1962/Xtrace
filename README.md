@@ -11,8 +11,10 @@ project's ".pch" file so you can access it's methods from anywhere in your proje
 There is a simple category based interface to start tracing:
 
 	[MyClass xtrace]; // to trace all calls to instances of a class or..
+	// this will intercet all methods of any superclasses up to NSObject
 	
 	[instance xtrace]; // to trace all calls to a particular instance.
+	// multiple instances can by traced, use "notrace" to stop tracing
 	
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 

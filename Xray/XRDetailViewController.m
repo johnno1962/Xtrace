@@ -30,9 +30,9 @@
 {
     // Update the user interface for the detail item.
     //[Xtrace hideReturns:YES];
-    [Xtrace traceClass:[UIView class]];
+    //[Xtrace traceClass:[UIView class]];
     //[UILabel xtrace:10];
-    //[self.detailDescriptionLabel xtrace];
+    [self.detailDescriptionLabel xtrace];
     if (self.detailItem) {
         self.detailDescriptionLabel.text = [self.detailItem description];
     }
