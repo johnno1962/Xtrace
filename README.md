@@ -4,7 +4,22 @@ Xtrace
 Trace Objective-C method calls by class or instance
 
 Xtrace is a header Xtrace.h and a C++ implementation file Xtrace.mm that allows
-you to intercept all method calls to instances of a class or a particular instance.
+you to intercept all method calls to instances of a class or a particular instance
+giving you output such as this:
+
+	   [<UILabel 0x8d4f170> setCenter:{240, 160}] v16@0:4{CGPoint=ff}8
+		[<UILabel 0x8d4f170> actionForLayer:<CALayer 0x8d69410> forKey:<__NSCFString 0x8a535e0>] @16@0:4@8@12
+		 [<UILabel 0x8d4f170> _shouldAnimatePropertyWithKey:<__NSCFString 0x8a535e0>] c12@0:4@8
+		 -> 1 (_shouldAnimatePropertyWithKey:)
+		-> <NSNull 0x194d068> (actionForLayer:forKey:)
+	  [<UILabel 0x8d4f170> window] @8@0:4
+	  -> <UIWindow 0x8a69920> (window)
+	  [<UILabel 0x8d4f170> _isAncestorOfFirstResponder] c8@0:4
+	  -> 0 (_isAncestorOfFirstResponder)
+	 [<UILabel 0x8d4f170> layoutSublayersOfLayer:<CALayer 0x8d69410>] v12@0:4@8
+	  [<UILabel 0x8d4f170> _viewControllerToNotifyOnLayoutSubviews] @8@0:4
+	   [<UILabel 0x8d4f170> _viewDelegate] @8@0:4
+	   -> <nil 0x0> (_viewDelegate)
 
 To use, add Xtrace.{h,mm} to your project and add an import of Xtrace.h to your
 project's ".pch" file so you can access it's methods from anywhere in your project.
