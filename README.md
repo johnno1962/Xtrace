@@ -1,4 +1,4 @@
-# ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif) Xtrace
+# ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif) - Xtrace
 
 Trace Objective-C method calls by class or instance
 
@@ -33,8 +33,9 @@ There is a simple category based shortcut interface to start tracing:
 	
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
-most common configurations of OS X and iOS applications. The starting poin is the
-XRAppDelegate class. The XRDetailViewController then switches to instance viewing.
+most common configurations of OS X and iOS applications. The starting point is the
+XRAppDelegate.m class. The XRDetailViewController.m then switches to instance viewing
+of a specific UILabel when the detail view loads.
 
 If you are not using ARC you can enable display of method arguments as follows:
 
@@ -58,7 +59,7 @@ A few exmaple combos:
 
     // trace UI label instance excluding UIView methods
     [UIView notrace];
-    [uiLabel xtrace];
+    [label xtrace];
     
     // trace two instances
     [label trace];
