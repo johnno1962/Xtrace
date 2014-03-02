@@ -1,5 +1,4 @@
-Xtrace
-======
+# ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif) Xtrace
 
 Trace Objective-C method calls by class or instance
 
