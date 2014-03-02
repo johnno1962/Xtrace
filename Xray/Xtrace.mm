@@ -60,11 +60,15 @@ extern "C" {
     [Xtrace traceInstance:self];
 }
 
+- (void)untrace {
+    [Xtrace untrace:self];
+}
+
 @end
 
 @implementation Xtrace
 
-static BOOL useTargets, includeProperties, hideReturns, showArguments;
+static BOOL useTargets, includeProperties, hideReturns, showArguments, describeValues;
 
 + (void)hideReturns:(BOOL)hide {
     hideReturns = hide;
@@ -79,6 +83,10 @@ static BOOL useTargets, includeProperties, hideReturns, showArguments;
 #ifndef ARGS_SUPPORTED
     NSLog( @"Argument logging not possible under ARC or in 64bit Apps" );
 #endif
+}
+
++ (void)describeValues:(BOOL)desc {
+    describeValues = desc;
 }
 
 static regex_t *methodFilter;
@@ -148,6 +156,8 @@ static std::map<Class,std::map<SEL,original> > originals;
         targets.erase(i);
 }
 
+static BOOL describing;
+
 static NSString *formatValue( const char *type, void *valptr ) {
     switch ( type[0] ) {
         case 'B':
@@ -164,9 +174,15 @@ static NSString *formatValue( const char *type, void *valptr ) {
             return [NSString stringWithFormat:@"%f", *(float *)valptr];
         case 'd':
             return [NSString stringWithFormat:@"%f", *(double *)valptr];
+        case ':':
+            return [NSString stringWithFormat:@"@selector(%s)", sel_getName(*(SEL *)valptr)];
         case '#': case '@': {
             id obj = *(const id *)valptr;
-            return [NSString stringWithFormat:@"<%s %p>", class_getName(object_getClass(obj)), obj];
+            describing = YES;
+            NSString *desc = describeValues ? [obj description] :
+                [NSString stringWithFormat:@"<%s %p>", class_getName(object_getClass(obj)), obj];
+            describing = NO;
+            return desc;
         }
         case '^':
             return [NSString stringWithFormat:@"%p", *(void **)valptr];
@@ -200,6 +216,7 @@ static NSString *formatValue( const char *type, void *valptr ) {
 // stack layout with ARC is anybody's guess!!
 static NSString *arguments( original &orig, id *objptr ) {
     NSMutableString *str = [NSMutableString string];
+
     if ( !showArguments )
         [str appendFormat:@" %s", orig.name];
     else {
@@ -218,8 +235,8 @@ static NSString *arguments( original &orig, id *objptr ) {
             }
             aptr++;
         }
-
     }
+
     return str;
 }
 
@@ -288,7 +305,8 @@ static original &findOriginal( id obj, SEL sel, id *frame ) {
     orig.lastObj = thisObj;
 
     // add custom filtering of logging here..
-    if ( !useTargets || targets.find(orig.lastObj) != targets.end() )
+    if ( !describing &&
+        (!useTargets || targets.find(orig.lastObj) != targets.end()) )
         NSLog( @"%*s%s[<%s %p>%@] %s", indent++, "", orig.mtype,
               class_getName(object_getClass(obj)), obj,
 #ifndef ARGS_SUPPORTED
@@ -305,7 +323,8 @@ static original &findOriginal( id obj, SEL sel, id *frame ) {
 static void returning( original &orig, void *valptr ) {
     indent && indent--;
 
-    if ( !hideReturns && valptr && (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
+    if ( valptr && !hideReturns && !describing &&
+        (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
         NSString *val = formatValue(orig.type, valptr);
         if ( val )
             NSLog( @"%*s-> %@ (%s)", indent, "", val, orig.name );
@@ -336,6 +355,7 @@ static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
 
 // Apart from void, Xtrace will trace methods returning these types:
 INTERCEPT(oimpl,id)
+INTERCEPT(eimpl,SEL)
 INTERCEPT(bimpl,bool)
 INTERCEPT(cimpl,char)
 INTERCEPT(simpl,short)
@@ -381,6 +401,7 @@ INTERCEPT(aimpl,CGAffineTransform)
                     case '#':
                     case '@': newImpl = (IMP)oimpl; break;
                     case '^': newImpl = (IMP)yimpl; break;
+                    case ':': newImpl = (IMP)eimpl; break;
                     case '{':
                         if ( type[1] == '_' ) {
                             if ( strncmp(type,"{_NSRange=",10) == 0 )

@@ -59,6 +59,7 @@
 		BB4D8E9718C12C6700A51378 /* XrayTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = XrayTests.m; sourceTree = "<group>"; };
 		BB4D8EA118C12DBC00A51378 /* Xtrace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Xtrace.h; sourceTree = "<group>"; };
 		BB4D8EA218C12DBC00A51378 /* Xtrace.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Xtrace.mm; sourceTree = "<group>"; };
+		BB761E1018C3DB4800990A16 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README.md; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +137,7 @@
 		BB4D8E7018C12C6700A51378 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
+				BB761E1018C3DB4800990A16 /* README.md */,
 				BB4D8E7118C12C6700A51378 /* Xray-Info.plist */,
 				BB4D8E7218C12C6700A51378 /* InfoPlist.strings */,
 				BB4D8E7518C12C6700A51378 /* main.m */,

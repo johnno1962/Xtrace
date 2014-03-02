@@ -36,6 +36,9 @@
 // trace instance
 - (void)xtrace;
 
+// stop tacing ""
+- (void)untrace;
+
 @end
 
 // implementing class
@@ -46,6 +49,9 @@
 
 // attempt log of call arguments
 + (void)showArguments:(BOOL)show;
+
+// log values's "description"
++ (void)describeValues:(BOOL)desc;
 
 // property methods filtered out by default
 + (void)includeProperties:(BOOL)include;

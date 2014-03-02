@@ -10,42 +10,51 @@
 
 @implementation XRAppDelegate
 
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+    // Override point for customization after application launch.
+
+    // the various options..
+    //[Xtrace methodFilter:"^set"];
+    //[Xtrace describeValues:YES];
+    //[Xtrace hideReturns:YES];
+    //[UIView notrace];
+
+    [Xtrace showArguments:YES];
+    [XRAppDelegate xtrace];
+
+    CGRect a = {{111,222},{333,444}};
+    a.origin.x= 99;
+    NSLog(@"rect: %@",NSStringFromCGRect(a));
+
+    [self simple];
+    [self simple:a];
+    [self simple:a i:11 i:22];
+    [self i:1 i:2 simple:a];
+
+    return YES;
+}
+							
+// debugging stack layout
 - (void)simple {
     NSLog( @"%p %p", &self, &_cmd );
 }
 
 - (void)simple:(CGRect)a {
-    NSLog( @"%p %p %p", &self, &_cmd, &a );
+    NSLog( @"simple: %p %p %p", &self, &_cmd, &a );
     NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)simple:(CGRect)a i:(int)i1 i:(int)i2 {
-    NSLog( @"%p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    NSLog( @"simple:i:i: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
     NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)i:(int)i1 i:(int)i2 simple:(CGRect)a {
-    NSLog( @"%p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    NSLog( @"i:i:simple: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
     NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
-{
-    // Override point for customization after application launch.
-    //[Xtrace methodFilter:"set"];
-    [Xtrace showArguments:YES];
-    //[Xtrace hideReturns:YES];
-    [XRAppDelegate xtrace];
-    [self simple];
-    CGRect a = {{111,222},{333,444}};
-    a.origin.x= 99;
-    NSLog(@"%@",NSStringFromCGRect(a));
-    [self simple:a];
-    [self simple:a i:11 i:22];
-    [self i:1 i:2 simple:a];
-    return YES;
-}
-							
 - (void)applicationWillResignActive:(UIApplication *)application
 {
     // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
