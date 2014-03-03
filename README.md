@@ -62,10 +62,10 @@ Finally, callbacks can also be registered on a delegate before or after any meth
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
 Callbacks for specific methods can be used independently of full Class or instance tracing.
-"after" callbacks for methods that return a value can replace the returned value something
-like a variation on "aspect oriented programming".
+"after" callbacks for methods that return a value can replace the value returned to the caller
+something like a variation on "aspect oriented programming".
 
-### Test results:
+### What works:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png)
 
