@@ -57,13 +57,44 @@ Classes can also be excluded (again before other classes are traced) by calling:
     
 Finally, callbacks can also be registered on a delegate before or after any method is called:
 
-    [UILabel xtrace]; // setup trace first then setup delegate callback
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
-Callbacks for specific methods can be used independently of full Class or instance tracing.
+Callbacks for specific methods can now be used independently of full Class or instance tracing.
 "after" callbacks for methods that return a value can replace the value returned to the caller
 something like a variation on "aspect oriented programming".
+
+    // void method signature for UILabel
+    - (void)setText:(NSString *)text;
+
+    // "before" and "after" callback implementation in delegate
+    - (void)label:(id)receiver setText:(NSString *)text {
+        ...
+    }
+    
+Example callback signatures for non void methods:
+    
+    // non-void method signature in class "AClass"
+    - (NSString *)appendString:(NSString *)string;
+
+    // code to inject "before" method callback
+    [Xtrace forClass:[AClass class] before:@selector(appendString:) callback:@selector(object:appendString:)];
+
+    // "before" method callback implementation in delegate as per void
+    - (void)object:(id)receiver appendString:(NSString *)string {
+        ...
+    }
+
+    // code to inject "after" method callback
+    [Xtrace forClass:[AClass class] after:@selector(appendString:) callback:@selector(out:object:appendString:)];
+
+    // "after" callback implementation in delegate
+    - (NSString *)out:(NSString *)originalReturnValue object:(id)receiver appendString:(NSString *)string {
+        ...
+        return newReturnValue; // could be originalReturnValue
+    }
+    
+The callback selector names are arbitrary. It's is the order and type of arguments which is critical.
 
 ### What works:
 
