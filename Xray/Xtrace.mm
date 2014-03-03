@@ -5,7 +5,7 @@
 //  Created by John Holdsworth on 28/02/2014.
 //  Copyright (c) 2014 John Holdsworth. All rights reserved.
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#7 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#8 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -384,19 +384,22 @@ static void returning( original &orig, void *valptr ) {
 // replacement implmentations "swizzled" into place
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     original &orig = findOriginal(obj,sel,&obj);
-    if ( orig.before ) orig.before( delegate, sel, obj, ARG_COPY );
+    if ( orig.before )
+        ((void (*)( id obj, SEL sel, ... ))orig.before)( delegate, sel, obj, ARG_COPY );
 
     void (*impl)( id obj, SEL sel, ... ) = (void (*)( id obj, SEL sel, ... ))orig.impl;
     impl( obj, sel, ARG_COPY );
 
-    if ( orig.after ) orig.after( delegate, sel, obj, ARG_COPY );
+    if ( orig.after )
+        ((void (*)( id obj, SEL sel, ... ))orig.after)( delegate, sel, obj, ARG_COPY );
     returning( orig, NULL );
 }
 
 #define INTERCEPT(_name,_type) \
 static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
     original &orig = findOriginal(obj,sel,&obj); \
-    if ( orig.before ) orig.before( delegate, sel, obj, ARG_COPY ); \
+    if ( orig.before ) \
+        ((void (*)( id obj, SEL sel, ... ))orig.before)( delegate, sel, obj, ARG_COPY ); \
 \
     _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.impl; \
     _type out = impl( obj, sel, ARG_COPY ); \

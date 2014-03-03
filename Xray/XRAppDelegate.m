@@ -23,6 +23,10 @@
     return "hello aspect";
 }
 
+- (void)label:(UILabel *)label setText:(NSString *)text {
+    label.textColor = [UIColor redColor];
+}
+
 @end
 
 @implementation XRAppDelegate
@@ -57,6 +61,8 @@
 
     [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) perform:@selector(after:obj:msg:)];
     NSLog( @"%s", [self msg:"hello world"] );
+
+    [Xtrace forClass:[UILabel class] after:@selector(setText:) perform:@selector(label:setText:)];
 
     return YES;
 }
