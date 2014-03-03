@@ -55,6 +55,12 @@ Classes can also be excluded (again before other classes are traced) by calling:
     [UIView notrace]; // or alternatively..
 	[Xtrace dontTrace:[UIView class]];
     
+Finally, callbacks can also be registered on a delegate before or after any method is called:
+
+    [UILabel xtrace]; // setup trace first then setup delegate callback
+    [Xtrace setDelegate:delegate]; // delegate must not be traced itself
+    [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
+    
 A few exmaple combos:
 
     // trace UI label instance excluding UIView methods
@@ -69,7 +75,9 @@ A few exmaple combos:
     [view untrace];
     [label untrace];
 
-That's about it. If you encounter problems drop me a line on xtrace (at) johnholdsworth.com
+The ordering of these calls is: 1) Any class exclusions, 2) any method selector filter then 
+3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter problems drop me a
+line on xtrace (at) johnholdsworth.com
 
 As ever:
 

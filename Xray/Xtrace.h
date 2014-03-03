@@ -5,6 +5,8 @@
 //  Created by John Holdsworth on 28/02/2014.
 //  Copyright (c) 2014 John Holdsworth. All rights reserved.
 //
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#4 $
+//
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
 //  original which is called after logging the message.
@@ -13,12 +15,14 @@
 //  class or instance you want to log for example:
 //
 //  Log all messages of the navigation controller class
-//  and it's superclasss.
-//  [UINavigationController xtrace:2]
+//  and it's superclasses:
+//  [UINavigationController xtrace]
 //
 //  Log all messages sent to objects instance1/2
 //  [instance1 xtrace];
 //  [instance2 xtrace];
+//
+//  Instance tracing takes priority.
 //
 
 #ifdef DEBUG
@@ -36,13 +40,16 @@
 // trace instance
 - (void)xtrace;
 
-// stop tacing ""
+// stop tacing "
 - (void)untrace;
 
 @end
 
 // implementing class
 @interface Xtrace : NSObject
+
+// delegate for callbacks
++ (void)setDelegate:delegate;
 
 // hide log of return values
 + (void)hideReturns:(BOOL)hide;
@@ -73,6 +80,10 @@
 
 // stop tracing messages to instance
 + (void)untrace:(id)instance;
+
+// callbacks
++ (void)forClass:(Class)aClass before:(SEL)sel perform:(SEL)callback;
++ (void)forClass:(Class)aClass after:(SEL)sel perform:(SEL)callback;
 
 @end
 #endif

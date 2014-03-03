@@ -5,6 +5,8 @@
 //  Created by John Holdsworth on 28/02/2014.
 //  Copyright (c) 2014 John Holdsworth. All rights reserved.
 //
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#6 $
+//
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
 //
@@ -18,6 +20,8 @@
 //  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 //  SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
+
+#ifdef DEBUG
 
 #import "Xtrace.h"
 
@@ -65,6 +69,11 @@
 @implementation Xtrace
 
 static BOOL includeProperties, hideReturns, showArguments, describeValues, useTargets;
+static id delegate;
+
++ (void)setDelegate:aDelegate {
+    delegate = aDelegate;
+}
 
 + (void)hideReturns:(BOOL)hide {
     hideReturns = hide;
@@ -115,8 +124,8 @@ struct _arg {
 // information about original implementations
 class original {
 public:
-    IMP impl;
     Method method;
+    IMP impl, before, after;
     const char *name, *type, *mtype;
 #ifdef ARGS_SUPPORTED
     struct _arg args[ARGS_SUPPORTED];
@@ -157,6 +166,14 @@ static int indent;
     auto i = targets.find(XTRACE_BRIDGE(void *)instance);
     if ( i != targets.end() )
         targets.erase(i);
+}
+
++ (void)forClass:(Class)aClass before:(SEL)sel perform:(SEL)callback {
+    originals[aClass][sel].before = [delegate methodForSelector:callback];
+}
+
++ (void)forClass:(Class)aClass after:(SEL)sel perform:(SEL)callback {
+    originals[aClass][sel].after = [delegate methodForSelector:callback];
 }
 
 static BOOL describing;
@@ -345,16 +362,24 @@ static void returning( original &orig, void *valptr ) {
 // replacement implmentations "swizzled" into place
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     original &orig = findOriginal(obj,sel,&obj);
+    if ( orig.before ) orig.before( delegate, sel, obj, ARG_COPY );
+
     void (*impl)( id obj, SEL sel, ... ) = (void (*)( id obj, SEL sel, ... ))orig.impl;
     impl( obj, sel, ARG_COPY );
+
+    if ( orig.after ) orig.after( delegate, sel, obj, ARG_COPY );
     returning( orig, NULL );
 }
 
 #define INTERCEPT(_name,_type) \
 static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
     original &orig = findOriginal(obj,sel,&obj); \
+    if ( orig.before ) orig.before( delegate, sel, obj, ARG_COPY ); \
+\
     _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.impl; \
     _type out = impl( obj, sel, ARG_COPY ); \
+\
+    if ( orig.after ) orig.after( delegate, sel, obj, ARG_COPY ); \
     returning( orig, &out ); \
     return out; \
 }
@@ -480,4 +505,4 @@ INTERCEPT(aimpl,CGAffineTransform)
 
 @end
 
-
+#endif

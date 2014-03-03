@@ -8,6 +8,14 @@
 
 #import "XRAppDelegate.h"
 
+@implementation UIApplication(Callbacks)
+
+- (void)callbackFor:(XRAppDelegate *)del simple:(CGRect)a i:(int)i1 i:(int)i2 {
+    NSLog( @"callbackFor:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
+}
+
+@end
+
 @implementation XRAppDelegate
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
@@ -21,6 +29,12 @@
 
     [Xtrace showArguments:YES];
     [XRAppDelegate xtrace];
+
+    // setup trace before callbacks
+    // delegate must not be traced.
+    [Xtrace setDelegate:application];
+    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) perform:@selector(callbackFor:simple:i:i:)];
+    [Xtrace forClass:[XRAppDelegate class] after:@selector(simple:i:i:) perform:@selector(callbackFor:simple:i:i:)];
 
     CGRect a = {{111,222},{333,444}};
     a.origin.x= 99;
