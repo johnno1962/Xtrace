@@ -118,6 +118,8 @@ The ordering of calls to the api is: 1) Any class exclusions, 2) any method sele
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 
 problems drop me a line on xtrace (at) johnholdsworth.com.
 
+Announcements of major commits to the repo will be made on twitter [@Injection4Xcode](https://twitter.com/#!/@Injection4Xcode).
+
 ### As ever:
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 

@@ -5,7 +5,9 @@
 //  Created by John Holdsworth on 28/02/2014.
 //  Copyright (c) 2014 John Holdsworth. All rights reserved.
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#8 $
+//  Repo: https://github.com/johnno1962/Xtrace
+//
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#9 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -116,6 +118,8 @@ static regex_t *methodFilter;
     }
 }
 
+typedef void (*VIMP)( id obj, SEL sel, ... );
+
 struct _arg {
     const char *name, *type;
     int offset;
@@ -125,7 +129,8 @@ struct _arg {
 class original {
 public:
     Method method;
-    IMP impl, before, after;
+    BOOL callingBack;
+    VIMP impl, before, after;
     const char *name, *type, *mtype;
 #ifdef ARGS_SUPPORTED
     struct _arg args[ARGS_SUPPORTED];
@@ -171,12 +176,12 @@ static int indent;
 
 + (void)forClass:(Class)aClass before:(SEL)sel perform:(SEL)callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
-    originals[aClass][sel].before = [delegate methodForSelector:callback];
+    originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback];
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel perform:(SEL)callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
-    originals[aClass][sel].after = [delegate methodForSelector:callback];
+    originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback];
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
@@ -384,29 +389,42 @@ static void returning( original &orig, void *valptr ) {
 // replacement implmentations "swizzled" into place
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     original &orig = findOriginal(obj,sel,&obj);
-    if ( orig.before )
-        ((void (*)( id obj, SEL sel, ... ))orig.before)( delegate, sel, obj, ARG_COPY );
 
-    void (*impl)( id obj, SEL sel, ... ) = (void (*)( id obj, SEL sel, ... ))orig.impl;
-    impl( obj, sel, ARG_COPY );
+    if ( orig.before && !orig.callingBack ) {
+        orig.callingBack = YES;
+        orig.before( delegate, sel, obj, ARG_COPY );
+        orig.callingBack = NO;
+    }
 
-    if ( orig.after )
-        ((void (*)( id obj, SEL sel, ... ))orig.after)( delegate, sel, obj, ARG_COPY );
+    orig.impl( obj, sel, ARG_COPY );
+
+    if ( orig.after && !orig.callingBack ) {
+        orig.callingBack = YES;
+        orig.after( delegate, sel, obj, ARG_COPY );
+        orig.callingBack = NO;
+    }
+
     returning( orig, NULL );
 }
 
 #define INTERCEPT(_name,_type) \
 static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
     original &orig = findOriginal(obj,sel,&obj); \
-    if ( orig.before ) \
-        ((void (*)( id obj, SEL sel, ... ))orig.before)( delegate, sel, obj, ARG_COPY ); \
+\
+    if ( orig.before && !orig.callingBack ) { \
+        orig.callingBack = YES; \
+        orig.before( delegate, sel, obj, ARG_COPY ); \
+        orig.callingBack = NO; \
+    } \
 \
     _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.impl; \
     _type out = impl( obj, sel, ARG_COPY ); \
 \
-    if ( orig.after ) { \
+    if ( orig.after && !orig.callingBack ) { \
+        orig.callingBack = YES; \
         impl = (_type (*)( id obj, SEL sel, ... ))orig.after; \
         out = impl( delegate, sel, out, obj, ARG_COPY ); \
+        orig.callingBack = NO; \
     } \
 \
     returning( orig, &out ); \
@@ -510,7 +528,7 @@ INTERCEPT(aimpl,CGAffineTransform)
 #endif
         IMP impl = method_getImplementation(method);
         if ( impl != newImpl ) {
-            orig.impl = impl;
+            orig.impl = (VIMP)impl;
             method_setImplementation(method,newImpl);
         }
     }
