@@ -1,6 +1,6 @@
 # ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif)  Xtrace
 
-Trace Objective-C method calls by class or instance
+### Trace Objective-C method calls by class or instance
 
 Xtrace is a header Xtrace.h and a C++ implementation file Xtrace.mm that allows
 you to intercept all method calls to instances of a class or a particular instance
@@ -61,11 +61,15 @@ Finally, callbacks can also be registered on a delegate before or after any meth
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
-What actually works:
+Callbacks for specific methods can be used independently of full Class or instance tracing.
+"after" callbacks for methods that return a value can replace the returned value something
+like a variation on "aspect oriented programming".
+
+### Test results:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png)
 
-A few exmaple combos:
+### A few example combos:
 
     // trace UI label instance excluding UIView methods
     [UIView notrace];
@@ -80,10 +84,10 @@ A few exmaple combos:
     [label untrace];
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then 
-3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter problems drop me a
-line on xtrace (at) johnholdsworth.com
+3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 
+problems drop me a line on xtrace (at) johnholdsworth.com.
 
-As ever:
+### As ever:
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 

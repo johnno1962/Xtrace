@@ -5,7 +5,7 @@
 //  Created by John Holdsworth on 28/02/2014.
 //  Copyright (c) 2014 John Holdsworth. All rights reserved.
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#6 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#7 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -108,7 +108,7 @@ static regex_t *methodFilter;
     methodFilter = new regex_t;
     int error = regcomp(methodFilter, pattern, REG_ENHANCED);
     if ( error ) {
-        char errbuff[1024];
+        char errbuff[PATH_MAX];
         regerror( error, methodFilter, errbuff, sizeof errbuff );
         NSLog( @"Filter compilation error: %s, in pattern: \"%s\"", errbuff, pattern );
         delete methodFilter;
@@ -137,13 +137,14 @@ public:
 };
 
 static std::map<Class,std::map<SEL,original> > originals;
+static std::map<Class,char> excluded;
 static std::map<void *,char> targets;
 static int indent;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
-    originals[metaClass][_cmd];
-    originals[aClass][_cmd];
+    excluded[metaClass] = 1;
+    excluded[aClass] = 1;
 }
 
 + (void)traceClass:(Class)aClass {
@@ -169,11 +170,32 @@ static int indent;
 }
 
 + (void)forClass:(Class)aClass before:(SEL)sel perform:(SEL)callback {
+    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
     originals[aClass][sel].before = [delegate methodForSelector:callback];
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel perform:(SEL)callback {
+    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
     originals[aClass][sel].after = [delegate methodForSelector:callback];
+}
+
++ (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
+    for ( int l=0 ; l<levels ; l++ ) {
+
+        if ( excluded.find(aClass) == excluded.end() ) {
+            unsigned mc = 0;
+            Method *methods = class_copyMethodList(aClass, &mc);
+
+            for( int i=0; methods && i<mc; i++ )
+                [self intercept:aClass method:methods[i] mtype:mtype];
+
+            free( methods );
+        }
+
+        aClass = class_getSuperclass(aClass);
+        if ( aClass == [NSObject class] || aClass == object_getClass([NSObject class]) )
+            break;
+    }
 }
 
 static BOOL describing;
@@ -327,7 +349,7 @@ static original &findOriginal( id obj, SEL sel, id *frame ) {
     orig.lastObj = thisObj;
 
     // add custom filtering of logging here..
-    if ( !describing &&
+    if ( !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) )
         NSLog( @"%*s%s[<%s %p>%@] %s", indent++, "", orig.mtype,
               class_getName(object_getClass(obj)), obj,
@@ -345,7 +367,7 @@ static original &findOriginal( id obj, SEL sel, id *frame ) {
 static void returning( original &orig, void *valptr ) {
     indent && indent--;
 
-    if ( valptr && !hideReturns && !describing &&
+    if ( valptr && !hideReturns && !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
         NSString *val = formatValue(orig.type, valptr);
         if ( val )
@@ -379,7 +401,11 @@ static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
     _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.impl; \
     _type out = impl( obj, sel, ARG_COPY ); \
 \
-    if ( orig.after ) orig.after( delegate, sel, obj, ARG_COPY ); \
+    if ( orig.after ) { \
+        impl = (_type (*)( id obj, SEL sel, ... ))orig.after; \
+        out = impl( delegate, sel, out, obj, ARG_COPY ); \
+    } \
+\
     returning( orig, &out ); \
     return out; \
 }
@@ -402,107 +428,90 @@ INTERCEPT(pimpl,CGPoint)
 INTERCEPT(zimpl,CGSize)
 INTERCEPT(aimpl,CGAffineTransform)
 
-+ (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
-    for ( int l=0 ; l<levels ; l++ ) {
++ (void)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype {
+    SEL sel = method_getName(method);
+    const char *name = sel_getName(sel);
+    const char *className = class_getName(aClass);
+    const char *type = method_getTypeEncoding(method);
 
-        if ( originals[aClass].size() == 0 ) {
-            unsigned mc = 0;
-            const char *className = class_getName(aClass);
-            Method *methods = class_copyMethodList(aClass, &mc);
+    //NSLog( @"%s %s %s %s", mtype, className, name, type );
 
-            for( int i=0; methods && i<mc; i++ ) {
+    IMP newImpl = NULL;
+    switch ( type[0] == 'r' ? type[1] : type[0] ) {
+        case 'V':
+        case 'v': newImpl = (IMP)vimpl; break;
+        case 'B': newImpl = (IMP)bimpl; break;
+        case 'C':
+        case 'c': newImpl = (IMP)cimpl; break;
+        case 'S':
+        case 's': newImpl = (IMP)simpl; break;
+        case 'I':
+        case 'i': newImpl = (IMP)iimpl; break;
+        case 'L': case 'Q': case 'q':
+        case 'l': newImpl = (IMP)limpl; break;
+        case 'f': newImpl = (IMP)fimpl; break;
+        case 'd': newImpl = (IMP)dimpl; break;
+        case '#':
+        case '@': newImpl = (IMP)oimpl; break;
+        case '^': newImpl = (IMP)yimpl; break;
+        case ':': newImpl = (IMP)eimpl; break;
+        case '*': newImpl = (IMP)ximpl; break;
+        case '{':
+            if ( type[1] == '_' ) {
+                if ( strncmp(type,"{_NSRange=",10) == 0 )
+                    newImpl = (IMP)nimpl;
+                else if ( strncmp(type,"{_NSRect=",9) == 0 )
+                    newImpl = (IMP)rimpl;
+                else if ( strncmp(type,"{_NSPoint=",10) == 0 )
+                    newImpl = (IMP)pimpl;
+                else if ( strncmp(type,"{_NSSize=",9) == 0 )
+                    newImpl = (IMP)zimpl;
+            }
+            else if ( type[1] == 'C' ) {
+                if ( strncmp(type,"{CGRect=",8) == 0 )
+                    newImpl = (IMP)rimpl;
+                else if ( strncmp(type,"{CGPoint=",9) == 0 )
+                    newImpl = (IMP)pimpl;
+                else if ( strncmp(type,"{CGSize=",8) == 0 )
+                    newImpl = (IMP)zimpl;
+                else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
+                    newImpl = (IMP)aimpl;
+            }
+            break;
+        default:
+            NSLog(@"Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
+    }
 
-                Method method = methods[i];
-                SEL sel = method_getName(method);
-                const char *name = sel_getName(sel);
-                const char *type = method_getTypeEncoding(method);
+    const char *frameSize = type+1;
+    while ( !isdigit(*frameSize) )
+        frameSize++;
 
-                //NSLog( @"%s %s %s %s", mtype, className, name, type );
+    if ( atoi(frameSize) > ARG_SIZE )
+        NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
+              mtype, className, name );
+    else if ( newImpl && name[0] != '.' &&
+             strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
+             strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
+             (includeProperties || !class_getProperty( aClass, name )) &&
+             (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
 
-                IMP newImpl = NULL;
-                switch ( type[0] == 'r' ? type[1] : type[0] ) {
-                    case 'V':
-                    case 'v': newImpl = (IMP)vimpl; break;
-                    case 'B': newImpl = (IMP)bimpl; break;
-                    case 'C':
-                    case 'c': newImpl = (IMP)cimpl; break;
-                    case 'S':
-                    case 's': newImpl = (IMP)simpl; break;
-                    case 'I':
-                    case 'i': newImpl = (IMP)iimpl; break;
-                    case 'L': case 'Q': case 'q':
-                    case 'l': newImpl = (IMP)limpl; break;
-                    case 'f': newImpl = (IMP)fimpl; break;
-                    case 'd': newImpl = (IMP)dimpl; break;
-                    case '#':
-                    case '@': newImpl = (IMP)oimpl; break;
-                    case '^': newImpl = (IMP)yimpl; break;
-                    case ':': newImpl = (IMP)eimpl; break;
-                    case '*': newImpl = (IMP)ximpl; break;
-                    case '{':
-                        if ( type[1] == '_' ) {
-                            if ( strncmp(type,"{_NSRange=",10) == 0 )
-                                newImpl = (IMP)nimpl;
-                            else if ( strncmp(type,"{_NSRect=",9) == 0 )
-                                newImpl = (IMP)rimpl;
-                            else if ( strncmp(type,"{_NSPoint=",10) == 0 )
-                                newImpl = (IMP)pimpl;
-                            else if ( strncmp(type,"{_NSSize=",9) == 0 )
-                                newImpl = (IMP)zimpl;
-                        }
-                        else if ( type[1] == 'C' ) {
-                            if ( strncmp(type,"{CGRect=",8) == 0 )
-                                newImpl = (IMP)rimpl;
-                            else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                                newImpl = (IMP)pimpl;
-                            else if ( strncmp(type,"{CGSize=",8) == 0 )
-                                newImpl = (IMP)zimpl;
-                            else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                                newImpl = (IMP)aimpl;
-                        }
-                        break;
-                    default:
-                        NSLog(@"Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
-                }
-
-                IMP impl = method_getImplementation(method);
-                const char *frameSize = type+1;
-                while ( !isdigit(*frameSize) )
-                    frameSize++;
-
-                if ( atoi(frameSize) > ARG_SIZE )
-                    NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
-                          mtype, className, name );
-                else if ( newImpl && impl != newImpl && name[0] != '.' &&
-                    strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
-                    strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
-                    (includeProperties || !class_getProperty( aClass, name )) &&
-                    (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
-
-                    original &orig = originals[aClass][sel];
-                    orig.impl = impl;
-                    orig.name = name;
-                    orig.type = type;
-                    orig.mtype = mtype;
-                    orig.method = method;
+        original &orig = originals[aClass][sel];
+        orig.name = name;
+        orig.type = type;
+        orig.mtype = mtype;
+        orig.method = method;
 
 #ifdef ARGS_SUPPORTED
-                    extractSelector( name, orig.args );
-                    extractOffsets( type, orig.args );
+        extractSelector( name, orig.args );
+        extractOffsets( type, orig.args );
 #endif
-                    method_setImplementation(method,newImpl);
-                }
-            }
-
-            free( methods );
+        IMP impl = method_getImplementation(method);
+        if ( impl != newImpl ) {
+            orig.impl = impl;
+            method_setImplementation(method,newImpl);
         }
-
-        aClass = class_getSuperclass(aClass);
-        if ( aClass == [NSObject class] || aClass == object_getClass([NSObject class]) )
-            break;
     }
 }
 
 @end
-
 #endif
