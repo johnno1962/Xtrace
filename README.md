@@ -1,4 +1,4 @@
-# ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif) - Xtrace
+# ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif)  Xtrace
 
 Trace Objective-C method calls by class or instance
 
@@ -41,7 +41,7 @@ If you are not using ARC you can enable display of method arguments as follows:
 
 	[Xtrace showArguments:YES];
 	
-You should be able to switch to log all the "description" of all values using:
+You should be able to switch to log the "description" of all values using:
 
 	[Xtrace describeValues:YES];
 	
@@ -69,7 +69,7 @@ A few exmaple combos:
     [view untrace];
     [label untrace];
 
-That's about it. If you encounter any problems drop me a line on xtrace (at) johnholdsworth.com
+That's about it. If you encounter problems drop me a line on xtrace (at) johnholdsworth.com
 
 As ever:
 

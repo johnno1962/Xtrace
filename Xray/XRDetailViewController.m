@@ -29,9 +29,7 @@
 - (void)configureView
 {
     // Update the user interface for the detail item.
-    //[Xtrace hideReturns:YES];
-    //[Xtrace traceClass:[UIView class]];
-    //[UILabel xtrace:10];
+    //[UIView notrace];
     [self.detailDescriptionLabel xtrace];
     if (self.detailItem) {
         self.detailDescriptionLabel.text = [self.detailItem description];

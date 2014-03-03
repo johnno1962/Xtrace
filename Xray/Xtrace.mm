@@ -24,10 +24,6 @@
 #import <objc/runtime.h>
 #import <map>
 
-extern "C" {
-    #include <regex.h>
-}
-
 #ifdef __clang__
 #if __has_feature(objc_arc)
 #define XTRACE_ISARC
@@ -68,7 +64,7 @@ extern "C" {
 
 @implementation Xtrace
 
-static BOOL useTargets, includeProperties, hideReturns, showArguments, describeValues;
+static BOOL includeProperties, hideReturns, showArguments, describeValues, useTargets;
 
 + (void)hideReturns:(BOOL)hide {
     hideReturns = hide;
@@ -89,11 +85,19 @@ static BOOL useTargets, includeProperties, hideReturns, showArguments, describeV
     describeValues = desc;
 }
 
+extern "C" {
+    #include <regex.h>
+}
+
+#ifndef REG_ENHANCED
+#define REG_ENHANCED 0
+#endif
+
 static regex_t *methodFilter;
 
 + (void)methodFilter:(const char *)pattern {
     methodFilter = new regex_t;
-    int error = regcomp(methodFilter, pattern, 0);
+    int error = regcomp(methodFilter, pattern, REG_ENHANCED);
     if ( error ) {
         char errbuff[1024];
         regerror( error, methodFilter, errbuff, sizeof errbuff );
@@ -102,9 +106,6 @@ static regex_t *methodFilter;
         methodFilter = NULL;
     }
 }
-
-static std::map<void *,char> targets;
-static int indent;
 
 struct _arg {
     const char *name, *type;
@@ -127,6 +128,8 @@ public:
 };
 
 static std::map<Class,std::map<SEL,original> > originals;
+static std::map<void *,char> targets;
+static int indent;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
@@ -159,7 +162,7 @@ static std::map<Class,std::map<SEL,original> > originals;
 static BOOL describing;
 
 static NSString *formatValue( const char *type, void *valptr ) {
-    switch ( type[0] ) {
+    switch ( type[0] == 'r' ? type[1] : type[0] ) {
         case 'B':
             return [NSString stringWithFormat:@"%d", *(bool *)valptr];
         case 'c':
@@ -176,6 +179,10 @@ static NSString *formatValue( const char *type, void *valptr ) {
             return [NSString stringWithFormat:@"%f", *(double *)valptr];
         case ':':
             return [NSString stringWithFormat:@"@selector(%s)", sel_getName(*(SEL *)valptr)];
+        case '*':
+            return [NSString stringWithFormat:@"\"%.100s\"", *(char **)valptr];
+        case '^':
+            return [NSString stringWithFormat:@"%p", *(void **)valptr];
         case '#': case '@': {
             id obj = *(const id *)valptr;
             describing = YES;
@@ -184,8 +191,6 @@ static NSString *formatValue( const char *type, void *valptr ) {
             describing = NO;
             return desc;
         }
-        case '^':
-            return [NSString stringWithFormat:@"%p", *(void **)valptr];
         case '{':
             // structs printed back-to-front on stack //
 #ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
@@ -333,6 +338,7 @@ static void returning( original &orig, void *valptr ) {
     orig.lastObj = NULL;
 }
 
+#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*10
 #define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
 #define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
@@ -363,6 +369,7 @@ INTERCEPT(iimpl,int)
 INTERCEPT(limpl,long)
 INTERCEPT(fimpl,float)
 INTERCEPT(dimpl,double)
+INTERCEPT(ximpl,char *)
 INTERCEPT(yimpl,void *)
 INTERCEPT(nimpl,NSRange)
 INTERCEPT(rimpl,CGRect)
@@ -372,11 +379,14 @@ INTERCEPT(aimpl,CGAffineTransform)
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
     for ( int l=0 ; l<levels ; l++ ) {
+
         if ( originals[aClass].size() == 0 ) {
             unsigned mc = 0;
             const char *className = class_getName(aClass);
             Method *methods = class_copyMethodList(aClass, &mc);
+
             for( int i=0; methods && i<mc; i++ ) {
+
                 Method method = methods[i];
                 SEL sel = method_getName(method);
                 const char *name = sel_getName(sel);
@@ -385,10 +395,11 @@ INTERCEPT(aimpl,CGAffineTransform)
                 //NSLog( @"%s %s %s %s", mtype, className, name, type );
 
                 IMP newImpl = NULL;
-                switch ( type[0] ) {
+                switch ( type[0] == 'r' ? type[1] : type[0] ) {
                     case 'V':
                     case 'v': newImpl = (IMP)vimpl; break;
                     case 'B': newImpl = (IMP)bimpl; break;
+                    case 'C':
                     case 'c': newImpl = (IMP)cimpl; break;
                     case 'S':
                     case 's': newImpl = (IMP)simpl; break;
@@ -402,6 +413,7 @@ INTERCEPT(aimpl,CGAffineTransform)
                     case '@': newImpl = (IMP)oimpl; break;
                     case '^': newImpl = (IMP)yimpl; break;
                     case ':': newImpl = (IMP)eimpl; break;
+                    case '*': newImpl = (IMP)ximpl; break;
                     case '{':
                         if ( type[1] == '_' ) {
                             if ( strncmp(type,"{_NSRange=",10) == 0 )
@@ -428,17 +440,20 @@ INTERCEPT(aimpl,CGAffineTransform)
                         NSLog(@"Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
                 }
 
+                IMP impl = method_getImplementation(method);
                 const char *frameSize = type+1;
                 while ( !isdigit(*frameSize) )
                     frameSize++;
 
-                IMP impl = method_getImplementation(method);
-                if ( newImpl && impl != newImpl && name[0] != '.' &&
+                if ( atoi(frameSize) > ARG_SIZE )
+                    NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
+                          mtype, className, name );
+                else if ( newImpl && impl != newImpl && name[0] != '.' &&
                     strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
                     strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
-                    atoi(frameSize) <= sizeof(id) + sizeof(SEL) + sizeof(void *)*10 &&
                     (includeProperties || !class_getProperty( aClass, name )) &&
-                    (!methodFilter || regexec(methodFilter, name, 0, NULL, 0)!=REG_NOMATCH) ) {
+                    (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
+
                     original &orig = originals[aClass][sel];
                     orig.impl = impl;
                     orig.name = name;

@@ -18,7 +18,6 @@
     //[Xtrace methodFilter:"^set"];
     //[Xtrace describeValues:YES];
     //[Xtrace hideReturns:YES];
-    //[UIView notrace];
 
     [Xtrace showArguments:YES];
     [XRAppDelegate xtrace];
@@ -31,28 +30,32 @@
     [self simple:a];
     [self simple:a i:11 i:22];
     [self i:1 i:2 simple:a];
+    [self msg:"hello world"];
 
     return YES;
 }
 							
-// debugging stack layout
+// testing ARC stack layout - seems very strange
+// NOTE: CGRect structures are logged backwards!
+
 - (void)simple {
     NSLog( @"%p %p", &self, &_cmd );
 }
 
 - (void)simple:(CGRect)a {
     NSLog( @"simple: %p %p %p", &self, &_cmd, &a );
-    NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)simple:(CGRect)a i:(int)i1 i:(int)i2 {
     NSLog( @"simple:i:i: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
-    NSLog(@"%@",NSStringFromCGRect(*&a));
 }
 
 - (void)i:(int)i1 i:(int)i2 simple:(CGRect)a {
     NSLog( @"i:i:simple: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
-    NSLog(@"%@",NSStringFromCGRect(*&a));
+}
+
+- (const char *)msg:(const char *)msg {
+    return msg;
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application
