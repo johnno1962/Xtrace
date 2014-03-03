@@ -10,8 +10,12 @@
 
 @implementation UIApplication(Callbacks)
 
-- (void)callbackFor:(XRAppDelegate *)del simple:(CGRect)a i:(int)i1 i:(int)i2 {
-    NSLog( @"callbackFor:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
+- (void)before:(XRAppDelegate *)del simple:(CGRect)a i:(int)i1 i:(int)i2 {
+    NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
+}
+
+- (void)after:(XRAppDelegate *)del i:(int)i1 i:(int)i2 simple:(CGRect)a {
+    NSLog( @"after:i:i:simple: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
 }
 
 @end
@@ -33,8 +37,8 @@
     // setup trace before callbacks
     // delegate must not be traced.
     [Xtrace setDelegate:application];
-    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) perform:@selector(callbackFor:simple:i:i:)];
-    [Xtrace forClass:[XRAppDelegate class] after:@selector(simple:i:i:) perform:@selector(callbackFor:simple:i:i:)];
+    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) perform:@selector(before:simple:i:i:)];
+    [Xtrace forClass:[XRAppDelegate class] after:@selector(i:i:simple:) perform:@selector(after:i:i:simple:)];
 
     CGRect a = {{111,222},{333,444}};
     a.origin.x= 99;

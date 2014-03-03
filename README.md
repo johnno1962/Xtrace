@@ -60,7 +60,11 @@ Finally, callbacks can also be registered on a delegate before or after any meth
     [UILabel xtrace]; // setup trace first then setup delegate callback
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
-    
+
+What actually works:
+
+![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png)
+
 A few exmaple combos:
 
     // trace UI label instance excluding UIView methods
@@ -75,7 +79,7 @@ A few exmaple combos:
     [view untrace];
     [label untrace];
 
-The ordering of these calls is: 1) Any class exclusions, 2) any method selector filter then 
+The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then 
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter problems drop me a
 line on xtrace (at) johnholdsworth.com
 
