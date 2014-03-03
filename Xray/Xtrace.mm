@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#9 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#10 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -70,7 +70,7 @@
 
 @implementation Xtrace
 
-static BOOL includeProperties, hideReturns, showArguments, describeValues, useTargets;
+static BOOL includeProperties, hideReturns, showArguments, describeValues;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
@@ -122,7 +122,7 @@ typedef void (*VIMP)( id obj, SEL sel, ... );
 
 struct _arg {
     const char *name, *type;
-    int offset;
+    int stackOffset;
 };
 
 // information about original implementations
@@ -130,7 +130,7 @@ class original {
 public:
     Method method;
     BOOL callingBack;
-    VIMP impl, before, after;
+    VIMP before, original, after;
     const char *name, *type, *mtype;
 #ifdef ARGS_SUPPORTED
     struct _arg args[ARGS_SUPPORTED];
@@ -142,14 +142,15 @@ public:
 };
 
 static std::map<Class,std::map<SEL,original> > originals;
-static std::map<Class,char> excluded;
-static std::map<void *,char> targets;
+static std::map<Class,BOOL> excludedClasses;
+static std::map<void *,BOOL> targets;
+static BOOL useTargets;
 static int indent;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
-    excluded[metaClass] = 1;
-    excluded[aClass] = 1;
+    excludedClasses[metaClass] = 1;
+    excludedClasses[aClass] = 1;
 }
 
 + (void)traceClass:(Class)aClass {
@@ -174,12 +175,12 @@ static int indent;
         targets.erase(i);
 }
 
-+ (void)forClass:(Class)aClass before:(SEL)sel perform:(SEL)callback {
++ (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
     originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback];
 }
 
-+ (void)forClass:(Class)aClass after:(SEL)sel perform:(SEL)callback {
++ (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
     originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback];
 }
@@ -187,7 +188,7 @@ static int indent;
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
     for ( int l=0 ; l<levels ; l++ ) {
 
-        if ( excluded.find(aClass) == excluded.end() ) {
+        if ( excludedClasses.find(aClass) == excludedClasses.end() ) {
             unsigned mc = 0;
             Method *methods = class_copyMethodList(aClass, &mc);
 
@@ -279,7 +280,7 @@ static NSString *arguments( original &orig, id *objptr ) {
             if ( !aptr->type )
                 break;
             else {
-                NSString *val = formatValue(aptr->type, (void *)(frame-aptr[1].offset) );
+                NSString *val = formatValue(aptr->type, (void *)(frame-aptr[1].stackOffset) );
                 [str appendString:val?val:@"<?>"];
             }
             aptr++;
@@ -314,9 +315,9 @@ static int extractOffsets( const char *type, struct _arg *args ) {
         args->type = type;
         while ( !isdigit(*type) )
             type++;
-        args->offset = atoi(type);
+        args->stackOffset = atoi(type);
         if ( i==0 )
-            frameLen = args->offset;
+            frameLen = args->stackOffset;
         while ( isdigit(*type) )
             type++;
         if ( i>2 )
@@ -324,7 +325,7 @@ static int extractOffsets( const char *type, struct _arg *args ) {
         else
             args->type = NULL;
         if ( !*type ) {
-            args->offset = frameLen;
+            args->stackOffset = frameLen;
             return i;
         }
     }
@@ -396,7 +397,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
         orig.callingBack = NO;
     }
 
-    orig.impl( obj, sel, ARG_COPY );
+    orig.original( obj, sel, ARG_COPY );
 
     if ( orig.after && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -417,7 +418,7 @@ static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
         orig.callingBack = NO; \
     } \
 \
-    _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.impl; \
+    _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.original; \
     _type out = impl( obj, sel, ARG_COPY ); \
 \
     if ( orig.after && !orig.callingBack ) { \
@@ -528,7 +529,7 @@ INTERCEPT(aimpl,CGAffineTransform)
 #endif
         IMP impl = method_getImplementation(method);
         if ( impl != newImpl ) {
-            orig.impl = (VIMP)impl;
+            orig.original = (VIMP)impl;
             method_setImplementation(method,newImpl);
         }
     }

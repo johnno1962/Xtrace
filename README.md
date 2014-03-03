@@ -58,7 +58,7 @@ Classes can also be excluded (again before other classes are traced) by calling:
 Finally, callbacks can also be registered on a delegate to be called before or after any method is called:
 
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
-    [Xtrace forClass:[UILabel class] after:@selector(setText:) perform:@selector(label:setText:)];
+    [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
 Callbacks for specific methods can be used independently of full Class or instance tracing.
 "after" callbacks for methods that return a value can replace the value returned to the caller
@@ -78,7 +78,7 @@ Example callback signatures for non void methods:
     - (NSString *)appendString:(NSString *)string;
 
     // code to inject "before" method callback
-    [Xtrace forClass:[AClass class] before:@selector(appendString:) perform:@selector(object:appendString:)];
+    [Xtrace forClass:[AClass class] before:@selector(appendString:) callback:@selector(object:appendString:)];
 
     // "before" method callback implementation in delegate as per void
     - (void)object:(id)receiver appendString:(NSString *)string {
@@ -86,7 +86,7 @@ Example callback signatures for non void methods:
     }
 
     // code to inject "after" method callback
-    [Xtrace forClass:[AClass class] after:@selector(appendString:) perform:@selector(out:object:appendString:)];
+    [Xtrace forClass:[AClass class] after:@selector(appendString:) callback:@selector(out:object:appendString:)];
 
     // "after" callback implementation in delegate
     - (NSString *)out:(NSString *)originalReturnValue object:(id)receiver appendString:(NSString *)string {

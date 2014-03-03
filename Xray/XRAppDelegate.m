@@ -11,11 +11,11 @@
 @implementation UIApplication(XtraceDelegate)
 
 - (void)before:(XRAppDelegate *)obj simple:(CGRect)a i:(int)i1 i:(int)i2 {
-    NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
+    NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
 }
 
 - (void)after:(XRAppDelegate *)obj i:(int)i1 i:(int)i2 simple:(CGRect)a {
-    NSLog( @"after:i:i:simple: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(a) );
+    NSLog( @"after:i:i:simple: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
 }
 
 - (const char *)after:(const char *)out obj:(XRAppDelegate *)obj msg:(const char *)msg {
@@ -45,7 +45,7 @@
     // setup trace before callbacks
     // delegate must not be traced.
     [Xtrace setDelegate:application];
-    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) perform:@selector(before:simple:i:i:)];
+    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) callback:@selector(before:simple:i:i:)];
 
     CGRect a = {{111,222},{333,444}};
     a.origin.x= 99;
@@ -53,16 +53,16 @@
 
     [self simple:a i:11 i:22];
     [XRAppDelegate xtrace];
-    [Xtrace forClass:[XRAppDelegate class] after:@selector(i:i:simple:) perform:@selector(after:i:i:simple:)];
+    [Xtrace forClass:[XRAppDelegate class] after:@selector(i:i:simple:) callback:@selector(after:i:i:simple:)];
     [self i:1 i:2 simple:a];
 
     [self simple];
     [self simple:a];
 
-    [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) perform:@selector(after:obj:msg:)];
+    [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
     NSLog( @"%s", [self msg:"hello world"] );
 
-    [Xtrace forClass:[UILabel class] after:@selector(setText:) perform:@selector(label:setText:)];
+    [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
     return YES;
 }

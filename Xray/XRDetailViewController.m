@@ -29,7 +29,9 @@
 - (void)configureView
 {
     // Update the user interface for the detail item.
-    //[UIView notrace];
+#ifdef __LP64__
+    [UIView notrace]; // not sure why
+#endif
     [self.detailDescriptionLabel xtrace];
     if (self.detailItem) {
         self.detailDescriptionLabel.text = [self.detailItem description];
