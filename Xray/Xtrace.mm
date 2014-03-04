@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#10 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#11 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -44,9 +44,7 @@
 #define XTRACE_RETAINED
 #endif
 
-#if !defined(__LP64__) && !defined(XTRACE_ISARC)
 #define ARGS_SUPPORTED 20
-#endif
 
 @implementation NSObject(Xtrace)
 
@@ -87,9 +85,10 @@ static id delegate;
 
 + (void)showArguments:(BOOL)show {
     showArguments = show;
-#ifndef ARGS_SUPPORTED
-    NSLog( @"Argument logging not possible under ARC or in 64bit Apps" );
+#ifdef __LP64__
+    NSLog( @"** Argument logging not reliable with 64bit apps **" );
 #endif
+
 }
 
 + (void)describeValues:(BOOL)desc {
@@ -204,6 +203,7 @@ static int indent;
     }
 }
 
+
 static BOOL describing;
 
 static NSString *formatValue( const char *type, void *valptr ) {
@@ -259,80 +259,12 @@ static NSString *formatValue( const char *type, void *valptr ) {
                 return NSStringFromRange( *(NSRange *)valptr );
     }
 
-    return nil;
+    return @"<??>";
 }
 
-#ifdef ARGS_SUPPORTED
-// stack layout with ARC is anybody's guess!!
-static NSString *arguments( original &orig, id *objptr ) {
-    NSMutableString *str = [NSMutableString string];
-
-    if ( !showArguments )
-        [str appendFormat:@" %s", orig.name];
-    else {
-        const char *frame = (char *)(void *)objptr+sizeof *objptr;
-        struct _arg *aptr = orig.args;
-        for ( int i=0; i<ARGS_SUPPORTED ; i++ ) {
-            if ( !*aptr->name )
-                break;
-            [str appendFormat:@" %.*s", (int)(aptr[1].name-aptr->name), aptr->name];
-
-            if ( !aptr->type )
-                break;
-            else {
-                NSString *val = formatValue(aptr->type, (void *)(frame-aptr[1].stackOffset) );
-                [str appendString:val?val:@"<?>"];
-            }
-            aptr++;
-        }
-    }
-
-    return str;
-}
-
-static int extractSelector( const char *name, struct _arg *args ) {
-
-    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
-        args->name = name;
-        const char *next = index( name, ':' );
-        if ( next ) {
-            name = next+1;
-            args++;
-        }
-        else {
-            args[1].name = name+strlen(name);
-            return i;
-        }
-    }
-
-    return -1;
-}
-
-static int extractOffsets( const char *type, struct _arg *args ) {
-    int frameLen = -1;
-
-    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
-        args->type = type;
-        while ( !isdigit(*type) )
-            type++;
-        args->stackOffset = atoi(type);
-        if ( i==0 )
-            frameLen = args->stackOffset;
-        while ( isdigit(*type) )
-            type++;
-        if ( i>2 )
-            args++;
-        else
-            args->type = NULL;
-        if ( !*type ) {
-            args->stackOffset = frameLen;
-            return i;
-        }
-    }
-
-    return -1;
-}
-#endif
+#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*10
+#define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
+#define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
 // necessary to catch messages to [super ...]
 static BOOL hasSuper( Class aClass, SEL sel ) {
@@ -343,7 +275,7 @@ static BOOL hasSuper( Class aClass, SEL sel ) {
 }
 
 // find original implmentation for message
-static original &findOriginal( id obj, SEL sel, id *frame ) {
+static original &findOriginal( id obj, SEL sel, ARG_DEFS ) {
     void *thisObj = XTRACE_BRIDGE(void *)obj;
     Class aClass = object_getClass(obj);
 
@@ -356,15 +288,27 @@ static original &findOriginal( id obj, SEL sel, id *frame ) {
 
     // add custom filtering of logging here..
     if ( !describing && orig.mtype &&
-        (!useTargets || targets.find(orig.lastObj) != targets.end()) )
+        (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
+        NSMutableString *args = [NSMutableString string];
+
+        if ( !showArguments )
+            [args appendFormat:@" %s", orig.name];
+        else {
+            const char *frame = (char *)(void *)&obj+sizeof obj;
+
+            for ( struct _arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
+                [args appendFormat:@" %.*s", (int)(aptr[1].name-aptr->name), aptr->name];
+                if ( !aptr->type )
+                    break;
+
+                NSString *val = formatValue(aptr->type, (void *)(frame-aptr[1].stackOffset) );
+                [args appendString:val];
+            }
+        }
+
         NSLog( @"%*s%s[<%s %p>%@] %s", indent++, "", orig.mtype,
-              class_getName(object_getClass(obj)), obj,
-#ifndef ARGS_SUPPORTED
-              [NSString stringWithFormat:@" %s", orig.name],
-#else
-              arguments( orig, frame ),
-#endif
-              orig.type );
+              class_getName(object_getClass(obj)), obj, args, orig.type );
+    }
 
     return orig;
 }
@@ -376,20 +320,15 @@ static void returning( original &orig, void *valptr ) {
     if ( valptr && !hideReturns && !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
         NSString *val = formatValue(orig.type, valptr);
-        if ( val )
-            NSLog( @"%*s-> %@ (%s)", indent, "", val, orig.name );
+        NSLog( @"%*s-> %@ (%s)", indent, "", val, orig.name );
     }
 
     orig.lastObj = NULL;
 }
 
-#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*10
-#define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
-#define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
-
 // replacement implmentations "swizzled" into place
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
-    original &orig = findOriginal(obj,sel,&obj);
+    original &orig = findOriginal(obj, sel, ARG_COPY);
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -410,7 +349,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
 
 #define INTERCEPT(_name,_type) \
 static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
-    original &orig = findOriginal(obj,sel,&obj); \
+    original &orig = findOriginal(obj, sel, ARG_COPY); \
 \
     if ( orig.before && !orig.callingBack ) { \
         orig.callingBack = YES; \
@@ -518,21 +457,66 @@ INTERCEPT(aimpl,CGAffineTransform)
              (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
 
         original &orig = originals[aClass][sel];
+
         orig.name = name;
         orig.type = type;
         orig.mtype = mtype;
         orig.method = method;
 
-#ifdef ARGS_SUPPORTED
-        extractSelector( name, orig.args );
-        extractOffsets( type, orig.args );
-#endif
+        [self extractSelector:name into:orig.args];
+        [self extractOffsets:type into:orig.args];
+
         IMP impl = method_getImplementation(method);
         if ( impl != newImpl ) {
             orig.original = (VIMP)impl;
             method_setImplementation(method,newImpl);
         }
     }
+}
+
+// break up selector into args
++ (int)extractSelector:(const char *)name into:(struct _arg *)args {
+
+    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+        args->name = name;
+        const char *next = index( name, ':' );
+        if ( next ) {
+            name = next+1;
+            args++;
+        }
+        else {
+            args[1].name = name+strlen(name);
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+// parse method encoding into stack offsets
++ (int)extractOffsets:(const char *)type into:(struct _arg *)args {
+    int frameLen = -1;
+
+    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+        args->type = type;
+        while ( !isdigit(*type) )
+            type++;
+        args->stackOffset = atoi(type);
+        if ( i==0 )
+            frameLen = args->stackOffset;
+        while ( isdigit(*type) )
+            type++;
+        if ( i>2 )
+            args++;
+        else
+            args->type = NULL;
+        if ( !*type ) {
+            args->stackOffset = frameLen;
+            return i;
+        }
+    }
+
+    return -1;
 }
 
 @end

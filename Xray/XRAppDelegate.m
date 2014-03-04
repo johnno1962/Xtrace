@@ -12,13 +12,29 @@
 
 - (void)before:(XRAppDelegate *)obj simple:(CGRect)a i:(int)i1 i:(int)i2 {
     NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
+    assert(i1==11);
+    assert(i2==22);
+#ifndef __LP64__
+    assert(a.origin.x=99);
+#else
+    assert(a.origin.y=99); // frame problem with CGRect on 64 bits
+#endif
 }
 
 - (void)after:(XRAppDelegate *)obj i:(int)i1 i:(int)i2 simple:(CGRect)a {
     NSLog( @"after:i:i:simple: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
+    assert(i1==1);
+    assert(i2==2);
+#ifndef __LP64__
+    assert(a.origin.x=99);
+#else
+    assert(a.origin.y=99); // frame problem with CGRect on 64 bits
+#endif
 }
 
 - (const char *)after:(const char *)out obj:(XRAppDelegate *)obj msg:(const char *)msg {
+    assert(strcmp(msg,"hello world")==0);
+    assert(strcmp(out,"hello world")==0);
     NSLog( @"after:obj:msg: %s", msg );
     return "hello aspect";
 }
@@ -41,6 +57,11 @@
     //[Xtrace hideReturns:YES];
 
     [Xtrace showArguments:YES];
+#ifndef __LP64__ // problems
+    [UINavigationController xtrace];
+#else
+    [UIViewController xtrace];
+#endif
 
     // setup trace before callbacks
     // delegate must not be traced.
@@ -60,7 +81,7 @@
     [self simple:a];
 
     [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
-    NSLog( @"%s", [self msg:"hello world"] );
+    assert(strcmp([self msg:"hello world"],"hello aspect")==0);
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
@@ -76,17 +97,23 @@
 
 - (void)simple:(CGRect)a {
     NSLog( @"simple: %p %p %p", &self, &_cmd, &a );
+    assert(a.origin.x=99);
 }
 
 - (void)simple:(CGRect)a i:(int)i1 i:(int)i2 {
     NSLog( @"simple:i:i: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    assert(i1=11);
+    assert(a.origin.x=99);
 }
 
 - (void)i:(int)i1 i:(int)i2 simple:(CGRect)a {
     NSLog( @"i:i:simple: %p %p %p %p %p", &self, &_cmd, &a, &i1, &i2 );
+    assert(i1=1);
+    assert(a.origin.x=99);
 }
 
 - (const char *)msg:(const char *)msg {
+    assert(strcmp(msg,"hello world")==0);
     return msg;
 }
 
