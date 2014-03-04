@@ -37,11 +37,11 @@ most common configurations of OS X and iOS applications. The starting point is t
 XRAppDelegate.m class. The XRDetailViewController.m then switches to instance viewing
 of a specific UILabel when the detail view loads.
 
-If you are not using ARC you can enable display of method arguments as follows:
+Though it is less robust, you can enable display of method arguments as follows:
 
 	[Xtrace showArguments:YES];
 	
-You should be able to switch to log the "description" of all values using:
+You should also be able to switch to log the "description" of all values using:
 
 	[Xtrace describeValues:YES];
 	
@@ -60,10 +60,6 @@ Finally, callbacks can also be registered on a delegate to be called before or a
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
 
-Callbacks for specific methods can be used independently of full Class or instance tracing.
-"after" callbacks for methods that return a value can replace the value returned to the caller
-something like a variation on "aspect oriented programming".
-
     // void method signature for UILabel
     - (void)setText:(NSString *)text;
 
@@ -72,8 +68,10 @@ something like a variation on "aspect oriented programming".
         ...
     }
     
-Example callback signatures for non void methods:
-    
+Callbacks for specific methods can be used independently of full Class or instance tracing.
+"after" callbacks for methods that return a value can replace the value returned to the caller
+something like a variation on "aspect oriented programming".
+
     // non-void method signature in class "AClass"
     - (NSString *)appendString:(NSString *)string;
 
@@ -98,7 +96,7 @@ The callback selector names are arbitrary. It's the order and type of arguments 
 
 ### What works:
 
-![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png)
+![Icon](http://injectionforxcode.johnholdsworth.com/xtrace1.png)
 
 ### A few example combos:
 

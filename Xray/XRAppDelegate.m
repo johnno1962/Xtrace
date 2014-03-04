@@ -32,15 +32,18 @@
 #endif
 }
 
-- (const char *)after:(const char *)out obj:(XRAppDelegate *)obj msg:(const char *)msg {
-    assert(strcmp(msg,"hello world")==0);
-    assert(strcmp(out,"hello world")==0);
-    NSLog( @"after:obj:msg: %s", msg );
-    return "hello aspect";
+- (NSString *)after:(NSString *)out obj:(XRAppDelegate *)obj msg:(NSString *)msg {
+    NSLog( @"after:obj:msg: %@ -> %@", msg, out );
+    return [NSString stringWithFormat:@"%@, %@", out, @"hello aspect"];
 }
 
 - (void)label:(UILabel *)label setText:(NSString *)text {
     label.textColor = [UIColor redColor];
+}
+
+- (NSString *)out:(NSString *)text label:(UILabel *)label text:(int)dummy {
+    NSLog(@"text getter: %@", text);
+    return text;
 }
 
 @end
@@ -81,9 +84,10 @@
     [self simple:a];
 
     [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
-    assert(strcmp([self msg:"hello world"],"hello aspect")==0);
+    assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
+    [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:label:text:)];
 
     return YES;
 }
@@ -112,8 +116,7 @@
     assert(a.origin.x=99);
 }
 
-- (const char *)msg:(const char *)msg {
-    assert(strcmp(msg,"hello world")==0);
+- (NSString *)msg:(NSString *)msg {
     return msg;
 }
 

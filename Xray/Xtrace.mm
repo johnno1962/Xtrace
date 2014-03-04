@@ -175,13 +175,15 @@ static int indent;
 }
 
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
-    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
-    originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback];
+    if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
+        !(originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback]) )
+        NSLog( @"** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback {
-    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL];
-    originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback];
+    if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
+        !(originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback]) )
+        NSLog( @"** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
@@ -389,7 +391,7 @@ INTERCEPT(pimpl,CGPoint)
 INTERCEPT(zimpl,CGSize)
 INTERCEPT(aimpl,CGAffineTransform)
 
-+ (void)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype {
++ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype {
     SEL sel = method_getName(method);
     const char *name = sel_getName(sel);
     const char *className = class_getName(aClass);
@@ -453,7 +455,7 @@ INTERCEPT(aimpl,CGAffineTransform)
     else if ( newImpl && name[0] != '.' &&
              strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
              strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
-             (includeProperties || !class_getProperty( aClass, name )) &&
+             (includeProperties || !mtype || !class_getProperty( aClass, name )) &&
              (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
 
         original &orig = originals[aClass][sel];
@@ -471,7 +473,11 @@ INTERCEPT(aimpl,CGAffineTransform)
             orig.original = (VIMP)impl;
             method_setImplementation(method,newImpl);
         }
+
+        return YES;
     }
+
+    return NO;
 }
 
 // break up selector into args
