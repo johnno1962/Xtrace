@@ -93,6 +93,17 @@ something like a variation on "aspect oriented programming".
     }
     
 The callback selector names are arbitrary. It's the order and type of arguments that is critical.
+Expect some trouble passing structs on 64 bit builds. The signature for intercepting a "getter"
+is a little contrived:
+
+    // setup callback
+    [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
+
+    // implementation of callback
+    - (NSString *)out:(NSString *)text labelText:(UILabel *)label {
+        ...
+        return text;
+    }
 
 ### What works:
 

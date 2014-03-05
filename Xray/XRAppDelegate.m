@@ -41,8 +41,8 @@
     label.textColor = [UIColor redColor];
 }
 
-- (NSString *)out:(NSString *)text label:(UILabel *)label text:(int)dummy {
-    NSLog(@"text getter: %@", text);
+- (NSString *)out:(NSString *)text labelText:(UILabel *)label {
+    NSLog(@"UILabel text: %@", text);
     return text;
 }
 
@@ -87,7 +87,7 @@
     assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
-    [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:label:text:)];
+    [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
     return YES;
 }

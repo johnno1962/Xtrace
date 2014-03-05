@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#12 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#14 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -88,7 +88,6 @@ static id delegate;
 #ifdef __LP64__
     NSLog( @"** Argument logging not reliable with 64bit apps **" );
 #endif
-
 }
 
 + (void)describeValues:(BOOL)desc {
@@ -250,11 +249,11 @@ static NSString *formatValue( const char *type, void *valptr ) {
             else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
                 return NSStringFromCGAffineTransform( *(CGAffineTransform *)valptr );
 #else
-            if ( strncmp(type,"{_NSRect=",9) == 0 )
+            if ( strncmp(type,"{_NSRect=",9) == 0 || strncmp(type,"{CGRect=",8) == 0 )
                 return NSStringFromRect( *(NSRect *)valptr );
-            else if ( strncmp(type,"{_NSPoint=",10) == 0 )
+            else if ( strncmp(type,"{_NSPoint=",10) == 0 || strncmp(type,"{CGPoint=",9) == 0 )
                 return NSStringFromPoint( *(NSPoint *)valptr );
-            else if ( strncmp(type,"{_NSSize=",9) == 0 )
+            else if ( strncmp(type,"{_NSSize=",9) == 0 || strncmp(type,"{CGSize=",8) == 0 )
                 return NSStringFromSize( *(NSSize *)valptr );
 #endif
             else if ( strncmp(type,"{_NSRange=",10) == 0 )
@@ -264,7 +263,7 @@ static NSString *formatValue( const char *type, void *valptr ) {
     return @"<??>";
 }
 
-#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*10
+#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*9 // something may be aligned
 #define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
 #define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
@@ -276,7 +275,7 @@ static BOOL hasSuper( Class aClass, SEL sel ) {
     return NO;
 }
 
-// find original implmentation for message
+// find original implmentation for message and log call
 static original &findOriginal( id obj, SEL sel, ARG_DEFS ) {
     void *thisObj = XTRACE_BRIDGE(void *)obj;
     Class aClass = object_getClass(obj);
@@ -315,7 +314,7 @@ static original &findOriginal( id obj, SEL sel, ARG_DEFS ) {
     return orig;
 }
 
-// returning value
+// log returning value
 static void returning( original &orig, void *valptr ) {
     indent && indent--;
 
@@ -349,47 +348,29 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     returning( orig, NULL );
 }
 
-#define INTERCEPT(_name,_type) \
-static _type XTRACE_RETAINED _name( id obj, SEL sel, ARG_DEFS ){ \
-    original &orig = findOriginal(obj, sel, ARG_COPY); \
-\
-    if ( orig.before && !orig.callingBack ) { \
-        orig.callingBack = YES; \
-        orig.before( delegate, sel, obj, ARG_COPY ); \
-        orig.callingBack = NO; \
-    } \
-\
-    _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.original; \
-    _type out = impl( obj, sel, ARG_COPY ); \
-\
-    if ( orig.after && !orig.callingBack ) { \
-        orig.callingBack = YES; \
-        impl = (_type (*)( id obj, SEL sel, ... ))orig.after; \
-        out = impl( delegate, sel, out, obj, ARG_COPY ); \
-        orig.callingBack = NO; \
-    } \
-\
-    returning( orig, &out ); \
-    return out; \
-}
+template <typename _type>
+static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
+    original &orig = findOriginal(obj, sel, ARG_COPY);
 
-// Apart from void, Xtrace will trace methods returning these types:
-INTERCEPT(oimpl,id)
-INTERCEPT(eimpl,SEL)
-INTERCEPT(bimpl,bool)
-INTERCEPT(cimpl,char)
-INTERCEPT(simpl,short)
-INTERCEPT(iimpl,int)
-INTERCEPT(limpl,long)
-INTERCEPT(fimpl,float)
-INTERCEPT(dimpl,double)
-INTERCEPT(ximpl,char *)
-INTERCEPT(yimpl,void *)
-INTERCEPT(nimpl,NSRange)
-INTERCEPT(rimpl,CGRect)
-INTERCEPT(pimpl,CGPoint)
-INTERCEPT(zimpl,CGSize)
-INTERCEPT(aimpl,CGAffineTransform)
+    if ( orig.before && !orig.callingBack ) {
+        orig.callingBack = YES;
+        orig.before( delegate, sel, obj, ARG_COPY );
+        orig.callingBack = NO;
+    }
+
+    _type (*impl)( id obj, SEL sel, ... ) = (_type (*)( id obj, SEL sel, ... ))orig.original;
+    _type out = impl( obj, sel, ARG_COPY );
+
+    if ( orig.after && !orig.callingBack ) {
+        orig.callingBack = YES;
+        impl = (_type (*)( id obj, SEL sel, ... ))orig.after;
+        out = impl( delegate, sel, out, obj, ARG_COPY );
+        orig.callingBack = NO;
+    }
+
+    returning( orig, &out );
+    return out;
+}
 
 + (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype {
     SEL sel = method_getName(method);
@@ -403,43 +384,43 @@ INTERCEPT(aimpl,CGAffineTransform)
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
         case 'V':
         case 'v': newImpl = (IMP)vimpl; break;
-        case 'B': newImpl = (IMP)bimpl; break;
+        case 'B': newImpl = (IMP)intercept<bool>; break;
         case 'C':
-        case 'c': newImpl = (IMP)cimpl; break;
+        case 'c': newImpl = (IMP)intercept<char>; break;
         case 'S':
-        case 's': newImpl = (IMP)simpl; break;
+        case 's': newImpl = (IMP)intercept<short>; break;
         case 'I':
-        case 'i': newImpl = (IMP)iimpl; break;
-        case 'L': case 'Q': case 'q':
-        case 'l': newImpl = (IMP)limpl; break;
-        case 'f': newImpl = (IMP)fimpl; break;
-        case 'd': newImpl = (IMP)dimpl; break;
+        case 'i': newImpl = (IMP)intercept<int>; break;
+        case 'L':
+        case 'l': newImpl = (IMP)intercept<long>; break;
+        case 'Q': // long or long long??
+        case 'q': newImpl = (IMP)intercept<long>; break;
+        case 'f': newImpl = (IMP)intercept<float>; break;
+        case 'd': newImpl = (IMP)intercept<double>; break;
         case '#':
-        case '@': newImpl = (IMP)oimpl; break;
-        case '^': newImpl = (IMP)yimpl; break;
-        case ':': newImpl = (IMP)eimpl; break;
-        case '*': newImpl = (IMP)ximpl; break;
+        case '@': newImpl = (IMP)intercept<id>; break;
+        case '^': newImpl = (IMP)intercept<void *>; break;
+        case ':': newImpl = (IMP)intercept<SEL>; break;
+        case '*': newImpl = (IMP)intercept<char *>; break;
         case '{':
-            if ( type[1] == '_' ) {
                 if ( strncmp(type,"{_NSRange=",10) == 0 )
-                    newImpl = (IMP)nimpl;
+                    newImpl = (IMP)intercept<NSRange>;
+#ifndef __IPHONE_OS_VERSION_MIN_REQUIRED
                 else if ( strncmp(type,"{_NSRect=",9) == 0 )
-                    newImpl = (IMP)rimpl;
+                    newImpl = (IMP)intercept<NSRect>;
                 else if ( strncmp(type,"{_NSPoint=",10) == 0 )
-                    newImpl = (IMP)pimpl;
+                    newImpl = (IMP)intercept<NSPoint>;
                 else if ( strncmp(type,"{_NSSize=",9) == 0 )
-                    newImpl = (IMP)zimpl;
-            }
-            else if ( type[1] == 'C' ) {
-                if ( strncmp(type,"{CGRect=",8) == 0 )
-                    newImpl = (IMP)rimpl;
+                    newImpl = (IMP)intercept<NSSize>;
+#endif
+                else if ( strncmp(type,"{CGRect=",8) == 0 )
+                    newImpl = (IMP)intercept<CGRect>;
                 else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                    newImpl = (IMP)pimpl;
+                    newImpl = (IMP)intercept<CGPoint>;
                 else if ( strncmp(type,"{CGSize=",8) == 0 )
-                    newImpl = (IMP)zimpl;
+                    newImpl = (IMP)intercept<CGSize>;
                 else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                    newImpl = (IMP)aimpl;
-            }
+                    newImpl = (IMP)intercept<CGAffineTransform>;
             break;
         default:
             NSLog(@"Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
