@@ -107,7 +107,7 @@ is a little contrived:
 
 ### What works:
 
-![Icon](http://injectionforxcode.johnholdsworth.com/xtrace1.png)
+![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=1)
 
 ### A few example combos:
 

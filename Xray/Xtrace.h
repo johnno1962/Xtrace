@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#6 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#8 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -83,8 +83,9 @@
 // stop tracing messages to instance
 + (void)untrace:(id)instance;
 
-// before and after callbacks
+// before, replacement and after callbacks
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback;
++ (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
 
 @end

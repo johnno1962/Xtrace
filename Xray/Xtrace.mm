@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#16 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#21 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -44,7 +44,7 @@
 #define XTRACE_RETAINED
 #endif
 
-#define ARGS_SUPPORTED 20
+#define ARGS_SUPPORTED 10
 
 @implementation NSObject(Xtrace)
 
@@ -68,11 +68,12 @@
 
 @implementation Xtrace
 
-static BOOL includeProperties, hideReturns, showArguments, describeValues;
+static BOOL includeProperties, hideReturns, showArguments, describeValues, logDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
     delegate = aDelegate;
+    logDelegate = [delegate respondsToSelector:@selector(xtraceLog:)];
 }
 
 + (void)hideReturns:(BOOL)hide {
@@ -85,9 +86,6 @@ static id delegate;
 
 + (void)showArguments:(BOOL)show {
     showArguments = show;
-#ifdef __LP64__
-    NSLog( @"Xtrace: ** Argument logging not reliable with 64bit apps **" );
-#endif
 }
 
 + (void)describeValues:(BOOL)desc {
@@ -131,7 +129,7 @@ public:
     VIMP before, original, after;
     const char *name, *type, *mtype;
 #ifdef ARGS_SUPPORTED
-    struct _arg args[ARGS_SUPPORTED];
+    struct _arg args[ARGS_SUPPORTED+1];
 #endif
     void *lastObj;
     BOOL wasObj( void *thisObj ) {
@@ -174,15 +172,23 @@ static int indent;
 }
 
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
-    if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
-        !(originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback]) )
-        NSLog( @"Xtrace: ** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+    if ( !(originals[aClass][sel].before = [self forClass:aClass intercept:sel callback:callback]) )
+        NSLog( @"Xtrace: ** Could not setup before callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+}
+
++ (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback {
+    if ( !(originals[aClass][sel].original = [self forClass:aClass intercept:sel callback:callback]) )
+        NSLog( @"Xtrace: ** Could not setup replace callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback {
-    if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
-        !(originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback]) )
-        NSLog( @"Xtrace: ** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+    if ( !(originals[aClass][sel].after = [self forClass:aClass intercept:sel callback:callback]) )
+        NSLog( @"Xtrace: ** Could not setup after callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+}
+
++ (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
+    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ?
+    (VIMP)[delegate methodForSelector:callback] : (VIMP)NULL;
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
@@ -204,79 +210,92 @@ static int indent;
     }
 }
 
+// delegate can implement this method
+- (void)xtraceLog:(NSString *)trace {
+}
 
 static BOOL describing;
 
-static NSString *formatValue( const char *type, void *valptr ) {
+#define APPEND_TYPE( _enc, _fmt, _type ) case _enc: [args appendFormat:_fmt, va_arg(*argp,_type)]; return YES;
+
+static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutableString *args ) {
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
+        case 'V': case 'v':
+            return NO;
+#if 0
         case 'B':
-            return [NSString stringWithFormat:@"%d", *(bool *)valptr];
-        case 'c':
-            return [NSString stringWithFormat:@"%d", *(char *)valptr];
-        case 'C':
-            return [NSString stringWithFormat:@"%u", *(unsigned char *)valptr];
-        case 's':
-            return [NSString stringWithFormat:@"%d", *(short *)valptr];
-        case 'S':
-            return [NSString stringWithFormat:@"%u", *(unsigned short *)valptr];
-        case 'i':
-            return [NSString stringWithFormat:@"%d", *(int *)valptr];
-        case 'I':
-            return [NSString stringWithFormat:@"%u", *(unsigned int *)valptr];
+        case 'C': case 'c':
+        case 'S': case 's':
+#else
+        // warnings here necessary evil
+        APPEND_TYPE( 'B', @"%d", BOOL )
+        APPEND_TYPE( 'c', @"%d", char )
+        APPEND_TYPE( 'C', @"%d", unsigned char )
+        APPEND_TYPE( 's', @"%d", short )
+        APPEND_TYPE( 'S', @"%d", unsigned short )
+#endif
+        APPEND_TYPE( 'i', @"%d", int )
+        APPEND_TYPE( 'I', @"%u", unsigned )
+        APPEND_TYPE( 'f', @"%f", float )
+        APPEND_TYPE( 'd', @"%f", double )
+        APPEND_TYPE( '^', @"%p", void * )
+        APPEND_TYPE( '*', @"\"%.100s\"", char * )
+#ifndef __LP64__
+        APPEND_TYPE( 'q', @"%lldLL", long long )
+#else
         case 'q':
-#ifndef __LP64__
-            return [NSString stringWithFormat:@"%lldLL", *(long long *)valptr];
 #endif
-        case 'l':
-            return [NSString stringWithFormat:@"%ldL", *(long *)valptr];
+        APPEND_TYPE( 'l', @"%ldL", long )
+#ifndef __LP64__
+        APPEND_TYPE( 'Q', @"%lluLL", unsigned long long )
+#else
         case 'Q':
-#ifndef __LP64__
-            return [NSString stringWithFormat:@"%lluLL", *(unsigned long long *)valptr];
 #endif
-        case 'L':
-            return [NSString stringWithFormat:@"%luL", *(unsigned long *)valptr];
-        case 'f':
-            return [NSString stringWithFormat:@"%f", *(float *)valptr];
-        case 'd':
-            return [NSString stringWithFormat:@"%f", *(double *)valptr];
+        APPEND_TYPE( 'L', @"%luL", unsigned long )
         case ':':
-            return [NSString stringWithFormat:@"@selector(%s)", sel_getName(*(SEL *)valptr)];
-        case '*':
-            return [NSString stringWithFormat:@"\"%.100s\"", *(char **)valptr];
-        case '^':
-            return [NSString stringWithFormat:@"%p", *(void **)valptr];
+            [args appendFormat:@"@selector(%s)", sel_getName(va_arg(*argp,SEL))];
+            return YES;
         case '#': case '@': {
-            id obj = *(const id *)valptr;
-            describing = YES;
-            NSString *desc = describeValues ? [obj description] :
-                [NSString stringWithFormat:@"<%s %p>", class_getName(object_getClass(obj)), obj];
-            describing = NO;
-            return desc;
+            //void *optr = va_arg(*argp,void *);
+            //id obj = XTRACE_BRIDGE(id)optr;
+            id obj = va_arg(*argp,id);
+            if ( describeValues ) {
+                describing = YES;
+                [args appendString:obj?[obj description]:@"<nil>"];
+                describing = NO;
+            }
+            else
+                [args appendFormat:@"<%s %p>", class_getName(object_getClass(obj)), obj];
+            return YES;
         }
         case '{':
             // structs printed back-to-front on stack //
 #ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
             if ( strncmp(type,"{CGRect=",8) == 0 )
-                return NSStringFromCGRect( *(CGRect *)valptr );
+                [args appendString:NSStringFromCGRect( va_arg(*argp,CGRect) )];
             else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                return NSStringFromCGPoint( *(CGPoint *)valptr );
+                [args appendString:NSStringFromCGPoint( va_arg(*argp,CGPoint) )];
             else if ( strncmp(type,"{CGSize=",8) == 0 )
-                return NSStringFromCGSize( *(CGSize *)valptr );
+                [args appendString:NSStringFromCGSize( va_arg(*argp,CGSize) )];
             else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                return NSStringFromCGAffineTransform( *(CGAffineTransform *)valptr );
+                [args appendString:NSStringFromCGAffineTransform( va_arg(*argp,CGAffineTransform) )];
 #else
             if ( strncmp(type,"{_NSRect=",9) == 0 || strncmp(type,"{CGRect=",8) == 0 )
-                return NSStringFromRect( *(NSRect *)valptr );
+                [args appendString:NSStringFromRect( va_arg(*argp,NSRect) )];
             else if ( strncmp(type,"{_NSPoint=",10) == 0 || strncmp(type,"{CGPoint=",9) == 0 )
-                return NSStringFromPoint( *(NSPoint *)valptr );
+                [args appendString:NSStringFromPoint( va_arg(*argp,NSPoint) )];
             else if ( strncmp(type,"{_NSSize=",9) == 0 || strncmp(type,"{CGSize=",8) == 0 )
-                return NSStringFromSize( *(NSSize *)valptr );
+                [args appendString:NSStringFromSize( va_arg(*argp,NSSize) )];
 #endif
             else if ( strncmp(type,"{_NSRange=",10) == 0 )
-                return NSStringFromRange( *(NSRange *)valptr );
+                [args appendString:NSStringFromRange( va_arg(*argp,NSRange) )];
+            else
+                break;
+            return YES;
     }
 
-    return @"<??>";
+    [args appendString:@"<??>"];
+    return YES;
 }
 
 #define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*9 // something may be aligned
@@ -292,7 +311,9 @@ static BOOL hasSuper( Class aClass, SEL sel ) {
 }
 
 // find original implmentation for message and log call
-static original &findOriginal( id obj, SEL sel, ARG_DEFS ) {
+static original &findOriginal( id obj, SEL sel, ... ) {
+    va_list argp; va_start(argp, sel);
+
     void *thisObj = XTRACE_BRIDGE(void *)obj;
     Class aClass = object_getClass(obj);
 
@@ -303,47 +324,61 @@ static original &findOriginal( id obj, SEL sel, ARG_DEFS ) {
     original &orig = originals[aClass][sel];
     orig.lastObj = thisObj;
 
-    // add custom filtering of logging here..
     if ( !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
         NSMutableString *args = [NSMutableString string];
+        [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
+         orig.mtype, class_getName(object_getClass(obj)), obj];
 
         if ( !showArguments )
             [args appendFormat:@" %s", orig.name];
         else {
             const char *frame = (char *)(void *)&obj+sizeof obj;
+            void *valptr = &sel;
 
             for ( struct _arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
                 [args appendFormat:@" %.*s", (int)(aptr[1].name-aptr->name), aptr->name];
                 if ( !aptr->type )
                     break;
 
-                NSString *val = formatValue(aptr->type, (void *)(frame-aptr[1].stackOffset) );
-                [args appendString:val];
+                valptr = (void *)(frame+aptr[1].stackOffset);
+                formatValue( aptr->type, valptr, &argp, args );
             }
         }
 
-        NSLog( @"%*s%s[<%s %p>%@] %s", indent++, "", orig.mtype,
-              class_getName(object_getClass(obj)), obj, args, orig.type );
+        // add custom filtering of logging here..
+        [args appendFormat:@"] %s", orig.type];
+        if ( logDelegate )
+            [delegate xtraceLog:args];
+        else
+            NSLog( @"%@", args );
     }
 
     return orig;
 }
 
 // log returning value
-static void returning( original &orig, void *valptr ) {
+static void returning( original &orig, ... ) {
+    va_list argp; va_start(argp, orig);
     indent && indent--;
 
-    if ( valptr && !hideReturns && !describing && orig.mtype &&
+    if ( /*valptr &&*/ !hideReturns && !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
-        NSString *val = formatValue(orig.type, valptr);
-        NSLog( @"%*s-> %@ (%s)", indent, "", val, orig.name );
+        NSMutableString *val = [NSMutableString string];
+        [val appendFormat:@"%*s-> ", indent, ""];
+        if ( formatValue(orig.type, NULL, &argp, val) ) {
+            [val appendFormat:@" (%s)", orig.name];
+            if ( logDelegate )
+                [delegate xtraceLog:val];
+            else
+                NSLog( @"%@", val );
+        }
     }
 
     orig.lastObj = NULL;
 }
 
-// replacement implmentations "swizzled" into place
+// replacement implmentations "swizzled" onto class
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     original &orig = findOriginal(obj, sel, ARG_COPY);
 
@@ -361,7 +396,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
         orig.callingBack = NO;
     }
 
-    returning( orig, NULL );
+    returning( orig );
 }
 
 template <typename _type>
@@ -384,7 +419,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         orig.callingBack = NO;
     }
 
-    returning( orig, &out );
+    returning( orig, out );
     return out;
 }
 
@@ -462,8 +497,9 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 
         orig.name = name;
         orig.type = type;
-        orig.mtype = mtype;
         orig.method = method;
+        if ( mtype )
+            orig.mtype = mtype;
 
         [self extractSelector:name into:orig.args];
         [self extractOffsets:type into:orig.args];
@@ -480,7 +516,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return NO;
 }
 
-// break up selector into args
+// break up selector by argument
 + (int)extractSelector:(const char *)name into:(struct _arg *)args {
 
     for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
@@ -499,7 +535,10 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return -1;
 }
 
-// parse method encoding into stack offsets
+// parse method encoding into call stack offsets
+
+#if 1 // original version using information in method type encoding
+
 + (int)extractOffsets:(const char *)type into:(struct _arg *)args {
     int frameLen = -1;
 
@@ -507,7 +546,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         args->type = type;
         while ( !isdigit(*type) )
             type++;
-        args->stackOffset = atoi(type);
+        args->stackOffset = -atoi(type);
         if ( i==0 )
             frameLen = args->stackOffset;
         while ( isdigit(*type) )
@@ -525,5 +564,32 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return -1;
 }
 
+#else // alternate less robust "NSGetSizeAndAlignment()" version
+
++ (int)extractOffsets:(const char *)type into:(struct _arg *)args {
+    NSUInteger size, align, offset = 0;
+
+    type = NSGetSizeAndAlignment( type, &size, &align );
+
+    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+        while ( isdigit(*type) )
+            type++;
+        args->type = type;
+        type = NSGetSizeAndAlignment( type, &size, &align );
+        if ( !*type )
+            return i;
+        offset -= size;
+        offset &= ~(align-1 | sizeof(void *)-1);
+        args[1].stackOffset = (int)offset;
+        if ( i>1 )
+            args++;
+        else
+            args->type = NULL;
+    }
+
+    return -1;
+}
+
+#endif
 @end
 #endif

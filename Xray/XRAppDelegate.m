@@ -46,6 +46,18 @@
     return text;
 }
 
+- (unsigned char)out:(unsigned char)out obj:(XRAppDelegate *)obj frame:(char)i1 frame:(char)i2 rect:(CGRect)a char:(unsigned char)i3 {
+    NSLog( @"out:obj:frame:frame:rect:char: %d %d %d %d", out, i1, i2, i3 );
+#ifdef __LP64__
+    i3 = 222; // frame problem on 64 bits
+#endif
+    return out-i3;
+}
+
+- (void)xtraceLog:(NSString *)trace {
+    printf( "| %s\n", [trace UTF8String] );
+}
+
 @end
 
 @implementation XRAppDelegate
@@ -66,7 +78,6 @@
     [UIViewController xtrace];
 #endif
 
-    // setup trace before callbacks
     // delegate must not be traced.
     [Xtrace setDelegate:application];
     [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) callback:@selector(before:simple:i:i:)];
@@ -77,13 +88,13 @@
 
     [self simple:a i:11 i:22];
     [XRAppDelegate xtrace];
-    [Xtrace forClass:[XRAppDelegate class] after:@selector(i:i:simple:) callback:@selector(after:i:i:simple:)];
+    [Xtrace forClass:[self class] after:@selector(i:i:simple:) callback:@selector(after:i:i:simple:)];
     [self i:1 i:2 simple:a];
 
     [self simple];
     [self simple:a];
 
-    [Xtrace forClass:[XRAppDelegate class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
+    [Xtrace forClass:[self class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
     assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
@@ -91,6 +102,9 @@
 
     assert([self long:1L]==1);
     assert([self longLong:1LL]==1);
+
+    [Xtrace forClass:[self class] after:@selector(frame:frame:rect:char:) callback:@selector(out:obj:frame:frame:rect:char:)];
+    assert([self frame:111 frame:121 rect:a char:222]==0);
 
     return YES;
 }
@@ -129,6 +143,10 @@
 
 - (long long)longLong:(unsigned long long)l {
     return 1;
+}
+
+- (unsigned char)frame:(char)i1 frame:(char)i2 rect:(CGRect)a char:(unsigned char)i3 {
+    return i3;
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application
