@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#21 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#23 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -45,6 +45,8 @@
 #endif
 
 #define ARGS_SUPPORTED 10
+
+typedef void (*VIMP)( id obj, SEL sel, ... );
 
 @implementation NSObject(Xtrace)
 
@@ -113,8 +115,6 @@ static regex_t *methodFilter;
         methodFilter = NULL;
     }
 }
-
-typedef void (*VIMP)( id obj, SEL sel, ... );
 
 struct _arg {
     const char *name, *type;
@@ -188,7 +188,7 @@ static int indent;
 
 + (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
     return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ?
-    (VIMP)[delegate methodForSelector:callback] : (VIMP)NULL;
+        (VIMP)[delegate methodForSelector:callback] : NULL;
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
@@ -256,8 +256,6 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             [args appendFormat:@"@selector(%s)", sel_getName(va_arg(*argp,SEL))];
             return YES;
         case '#': case '@': {
-            //void *optr = va_arg(*argp,void *);
-            //id obj = XTRACE_BRIDGE(id)optr;
             id obj = va_arg(*argp,id);
             if ( describeValues ) {
                 describing = YES;
@@ -269,7 +267,6 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return YES;
         }
         case '{':
-            // structs printed back-to-front on stack //
 #ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
             if ( strncmp(type,"{CGRect=",8) == 0 )
                 [args appendString:NSStringFromCGRect( va_arg(*argp,CGRect) )];
@@ -298,10 +295,6 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
     return YES;
 }
 
-#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*9 // something may be aligned
-#define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
-#define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
-
 // necessary to catch messages to [super ...]
 static BOOL hasSuper( Class aClass, SEL sel ) {
     while ( (aClass = class_getSuperclass( aClass )) )
@@ -313,7 +306,6 @@ static BOOL hasSuper( Class aClass, SEL sel ) {
 // find original implmentation for message and log call
 static original &findOriginal( id obj, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
-
     void *thisObj = XTRACE_BRIDGE(void *)obj;
     Class aClass = object_getClass(obj);
 
@@ -377,6 +369,10 @@ static void returning( original &orig, ... ) {
 
     orig.lastObj = NULL;
 }
+
+#define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*9 // something may be aligned
+#define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
+#define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
 // replacement implmentations "swizzled" onto class
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
@@ -535,7 +531,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return -1;
 }
 
-// parse method encoding into call stack offsets
+// parse method encoding for call stack offsets (replaced by varargs)
 
 #if 1 // original version using information in method type encoding
 
