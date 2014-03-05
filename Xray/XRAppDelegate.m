@@ -89,6 +89,9 @@
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
+    assert([self long:1L]==1);
+    assert([self longLong:1LL]==1);
+
     return YES;
 }
 							
@@ -118,6 +121,14 @@
 
 - (NSString *)msg:(NSString *)msg {
     return msg;
+}
+
+- (long)long:(unsigned long)l {
+    return 1;
+}
+
+- (long long)longLong:(unsigned long long)l {
+    return 1;
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application

@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#14 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#16 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -86,7 +86,7 @@ static id delegate;
 + (void)showArguments:(BOOL)show {
     showArguments = show;
 #ifdef __LP64__
-    NSLog( @"** Argument logging not reliable with 64bit apps **" );
+    NSLog( @"Xtrace: ** Argument logging not reliable with 64bit apps **" );
 #endif
 }
 
@@ -110,7 +110,7 @@ static regex_t *methodFilter;
     if ( error ) {
         char errbuff[PATH_MAX];
         regerror( error, methodFilter, errbuff, sizeof errbuff );
-        NSLog( @"Filter compilation error: %s, in pattern: \"%s\"", errbuff, pattern );
+        NSLog( @"Xtrace: Filter compilation error: %s, in pattern: \"%s\"", errbuff, pattern );
         delete methodFilter;
         methodFilter = NULL;
     }
@@ -176,13 +176,13 @@ static int indent;
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
     if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
         !(originals[aClass][sel].before = (VIMP)[delegate methodForSelector:callback]) )
-        NSLog( @"** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+        NSLog( @"Xtrace: ** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback {
     if ( ![self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ||
         !(originals[aClass][sel].after = (VIMP)[delegate methodForSelector:callback]) )
-        NSLog( @"** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
+        NSLog( @"Xtrace: ** Could not setup callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
@@ -213,12 +213,28 @@ static NSString *formatValue( const char *type, void *valptr ) {
             return [NSString stringWithFormat:@"%d", *(bool *)valptr];
         case 'c':
             return [NSString stringWithFormat:@"%d", *(char *)valptr];
-        case 'S': case 's':
+        case 'C':
+            return [NSString stringWithFormat:@"%u", *(unsigned char *)valptr];
+        case 's':
             return [NSString stringWithFormat:@"%d", *(short *)valptr];
-        case 'I': case 'i':
+        case 'S':
+            return [NSString stringWithFormat:@"%u", *(unsigned short *)valptr];
+        case 'i':
             return [NSString stringWithFormat:@"%d", *(int *)valptr];
-        case 'L': case 'Q': case 'q': case 'l':
-            return [NSString stringWithFormat:@"%ld", *(long *)valptr];
+        case 'I':
+            return [NSString stringWithFormat:@"%u", *(unsigned int *)valptr];
+        case 'q':
+#ifndef __LP64__
+            return [NSString stringWithFormat:@"%lldLL", *(long long *)valptr];
+#endif
+        case 'l':
+            return [NSString stringWithFormat:@"%ldL", *(long *)valptr];
+        case 'Q':
+#ifndef __LP64__
+            return [NSString stringWithFormat:@"%lluLL", *(unsigned long long *)valptr];
+#endif
+        case 'L':
+            return [NSString stringWithFormat:@"%luL", *(unsigned long *)valptr];
         case 'f':
             return [NSString stringWithFormat:@"%f", *(float *)valptr];
         case 'd':
@@ -391,10 +407,13 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         case 's': newImpl = (IMP)intercept<short>; break;
         case 'I':
         case 'i': newImpl = (IMP)intercept<int>; break;
+        case 'Q':
+        case 'q':
+#ifndef __LP64__
+            newImpl = (IMP)intercept<long long>; break;
+#endif
         case 'L':
         case 'l': newImpl = (IMP)intercept<long>; break;
-        case 'Q': // long or long long??
-        case 'q': newImpl = (IMP)intercept<long>; break;
         case 'f': newImpl = (IMP)intercept<float>; break;
         case 'd': newImpl = (IMP)intercept<double>; break;
         case '#':
@@ -403,27 +422,27 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         case ':': newImpl = (IMP)intercept<SEL>; break;
         case '*': newImpl = (IMP)intercept<char *>; break;
         case '{':
-                if ( strncmp(type,"{_NSRange=",10) == 0 )
-                    newImpl = (IMP)intercept<NSRange>;
+            if ( strncmp(type,"{_NSRange=",10) == 0 )
+                newImpl = (IMP)intercept<NSRange>;
 #ifndef __IPHONE_OS_VERSION_MIN_REQUIRED
-                else if ( strncmp(type,"{_NSRect=",9) == 0 )
-                    newImpl = (IMP)intercept<NSRect>;
-                else if ( strncmp(type,"{_NSPoint=",10) == 0 )
-                    newImpl = (IMP)intercept<NSPoint>;
-                else if ( strncmp(type,"{_NSSize=",9) == 0 )
-                    newImpl = (IMP)intercept<NSSize>;
+            else if ( strncmp(type,"{_NSRect=",9) == 0 )
+                newImpl = (IMP)intercept<NSRect>;
+            else if ( strncmp(type,"{_NSPoint=",10) == 0 )
+                newImpl = (IMP)intercept<NSPoint>;
+            else if ( strncmp(type,"{_NSSize=",9) == 0 )
+                newImpl = (IMP)intercept<NSSize>;
 #endif
-                else if ( strncmp(type,"{CGRect=",8) == 0 )
-                    newImpl = (IMP)intercept<CGRect>;
-                else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                    newImpl = (IMP)intercept<CGPoint>;
-                else if ( strncmp(type,"{CGSize=",8) == 0 )
-                    newImpl = (IMP)intercept<CGSize>;
-                else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                    newImpl = (IMP)intercept<CGAffineTransform>;
+            else if ( strncmp(type,"{CGRect=",8) == 0 )
+                newImpl = (IMP)intercept<CGRect>;
+            else if ( strncmp(type,"{CGPoint=",9) == 0 )
+                newImpl = (IMP)intercept<CGPoint>;
+            else if ( strncmp(type,"{CGSize=",8) == 0 )
+                newImpl = (IMP)intercept<CGSize>;
+            else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
+                newImpl = (IMP)intercept<CGAffineTransform>;
             break;
         default:
-            NSLog(@"Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
+            NSLog(@"Xtrace: Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
     }
 
     const char *frameSize = type+1;
