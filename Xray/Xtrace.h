@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#8 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#10 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -65,8 +65,9 @@
 // property methods filtered out by default
 + (void)includeProperties:(BOOL)include;
 
-// intercept only methods matching pattern
-+ (void)methodFilter:(const char *)pattern;
+// include/exclude methods matching pattern
++ (BOOL)includeMethods:(const char *)pattern;
++ (BOOL)excludeMethods:(const char *)pattern;
 
 // don't trace this class e.g. [UIView notrace]
 + (void)dontTrace:(Class)aClass;
@@ -87,6 +88,14 @@
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
+
+struct _stats {
+    NSTimeInterval entered, elapsed;
+    unsigned callCount;
+};
+
+// recorded stats
++ (struct _stats *)statsFor:(Class)aClass sel:(SEL)sel;
 
 @end
 #endif

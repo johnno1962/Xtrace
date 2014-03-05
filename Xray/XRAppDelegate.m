@@ -106,6 +106,7 @@
     [Xtrace forClass:[self class] after:@selector(frame:frame:rect:char:) callback:@selector(out:obj:frame:frame:rect:char:)];
     assert([self frame:111 frame:121 rect:a char:222]==0);
 
+    assert([Xtrace statsFor:[self class] sel:@selector(long:)]->callCount==1);
     return YES;
 }
 							

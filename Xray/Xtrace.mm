@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#24 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#26 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -70,12 +70,12 @@ typedef void (*VIMP)( id obj, SEL sel, ... );
 
 @implementation Xtrace
 
-static BOOL includeProperties, hideReturns, showArguments, describeValues, logDelegate;
+static BOOL includeProperties, hideReturns, showArguments, describeValues, logToDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
     delegate = aDelegate;
-    logDelegate = [delegate respondsToSelector:@selector(xtraceLog:)];
+    logToDelegate = [delegate respondsToSelector:@selector(xtraceLog:)];
 }
 
 + (void)hideReturns:(BOOL)hide {
@@ -102,10 +102,10 @@ extern "C" {
 #define REG_ENHANCED 0
 #endif
 
-static regex_t *methodFilter;
+static regex_t *includeMethods, *excludeMethods;
 
-+ (void)methodFilter:(const char *)pattern {
-    methodFilter = new regex_t;
++ (regex_t *)methodFilter:(const char *)pattern {
+    regex_t *methodFilter = new regex_t;
     int error = regcomp(methodFilter, pattern, REG_ENHANCED);
     if ( error ) {
         char errbuff[PATH_MAX];
@@ -114,6 +114,15 @@ static regex_t *methodFilter;
         delete methodFilter;
         methodFilter = NULL;
     }
+    return methodFilter;
+}
+
++ (BOOL)includeMethods:(const char *)pattern {
+    return (includeMethods = [self methodFilter:pattern]) != NULL;
+}
+
++ (BOOL)excludeMethods:(const char *)pattern {
+    return (excludeMethods = [self methodFilter:pattern]) != NULL;
 }
 
 struct _arg {
@@ -125,16 +134,17 @@ struct _arg {
 class original {
 public:
     Method method;
-    BOOL callingBack;
     VIMP before, original, after;
     const char *name, *type, *mtype;
-#ifdef ARGS_SUPPORTED
     struct _arg args[ARGS_SUPPORTED+1];
-#endif
+
     void *lastObj;
     BOOL wasObj( void *thisObj ) {
         return lastObj && thisObj == lastObj;
     }
+
+    struct _stats stats;
+    BOOL callingBack;
 };
 
 static std::map<Class,std::map<SEL,original> > originals;
@@ -210,8 +220,13 @@ static int indent;
     }
 }
 
-// delegate can implement this method
-- (void)xtraceLog:(NSString *)trace {
++ (struct _stats *)statsFor:(Class)aClass sel:(SEL)sel {
+    return &originals[aClass][sel].stats;
+}
+
+// delegate can implement as instance method
++ (void)xtraceLog:(NSString *)trace {
+    printf( "| %s\n", [trace UTF8String] );
 }
 
 static BOOL describing;
@@ -310,15 +325,18 @@ static BOOL hasSuper( Class aClass, SEL sel ) {
 // find original implmentation for message and log call
 static original &findOriginal( id obj, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
-    void *thisObj = XTRACE_BRIDGE(void *)obj;
     Class aClass = object_getClass(obj);
+    void *thisObj = XTRACE_BRIDGE(void *)obj;
 
     while ( (aClass && originals[aClass].find(sel) == originals[aClass].end())
            || (originals[aClass][sel].wasObj( thisObj ) && hasSuper(aClass, sel)) )
         aClass = class_getSuperclass( aClass );
 
     original &orig = originals[aClass][sel];
+
     orig.lastObj = thisObj;
+    orig.stats.callCount++;
+    orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
 
     if ( !describing && orig.mtype &&
         (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
@@ -343,11 +361,8 @@ static original &findOriginal( id obj, SEL sel, ... ) {
         }
 
         // add custom filtering of logging here..
-        [args appendFormat:@"] %s", orig.type];
-        if ( logDelegate )
-            [delegate xtraceLog:args];
-        else
-            NSLog( @"%@", args );
+        [args appendFormat:@"] %s %p", orig.type, orig.original];
+        [logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
     }
 
     return orig;
@@ -364,13 +379,11 @@ static void returning( original &orig, ... ) {
         [val appendFormat:@"%*s-> ", indent, ""];
         if ( formatValue(orig.type, NULL, &argp, val) ) {
             [val appendFormat:@" (%s)", orig.name];
-            if ( logDelegate )
-                [delegate xtraceLog:val];
-            else
-                NSLog( @"%@", val );
+            [logToDelegate ? delegate : [Xtrace class] xtraceLog:val];
         }
     }
 
+    orig.stats.elapsed = [NSDate timeIntervalSinceReferenceDate] - orig.stats.entered;
     orig.lastObj = NULL;
 }
 
@@ -491,7 +504,8 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
              strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
              strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
              (includeProperties || !mtype || !class_getProperty( aClass, name )) &&
-             (!methodFilter || regexec(methodFilter, name, 0, NULL, 0) != REG_NOMATCH) ) {
+             (!includeMethods || regexec(includeMethods, name, 0, NULL, 0) != REG_NOMATCH) &&
+             (!excludeMethods || regexec(excludeMethods, name, 0, NULL, 0) == REG_NOMATCH) ) {
 
         original &orig = originals[aClass][sel];
 

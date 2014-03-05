@@ -48,8 +48,9 @@ You should also be able to switch to log the "description" of all values using:
 Other features are a method name filtering regular expression (which must be set
 before starting any tracing):
 
-	[Xtrace methodFilter:"a|regular|expression"];
-	
+	[Xtrace includeMethods:"a|regular|expression"];
+	[Xtrace excludeMethods:"WithObjects:$"]; // varargs methods don't work
+
 Classes can also be excluded (again before other classes are traced) by calling:
 
     [UIView notrace]; // or alternatively..
@@ -109,10 +110,14 @@ is a little contrived:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=1)
 
+Overall, Xtrace works better than you might expect though there are problems tracing UIView and UITableView
+and with 64bit builds in particular callbacks involving "struct" arguments.
+
 ### A few example combos:
 
     // trace UI label instance excluding UIView methods
-    [UIView notrace];
+    [UITableView notrace]; // tracing UIView not reliable
+    [UIView notrace]; // tracing UIView not reliable
     [label xtrace];
     
     // trace two instances
