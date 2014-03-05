@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#23 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#24 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -276,6 +276,10 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
                 [args appendString:NSStringFromCGSize( va_arg(*argp,CGSize) )];
             else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
                 [args appendString:NSStringFromCGAffineTransform( va_arg(*argp,CGAffineTransform) )];
+            else if ( strncmp(type,"{UIEdgeInsets=",14) == 0 )
+                [args appendString:NSStringFromUIEdgeInsets( va_arg(*argp,UIEdgeInsets) )];
+            else if ( strncmp(type,"{UIOffset=",10) == 0 )
+                [args appendString:NSStringFromUIOffset( va_arg(*argp,UIOffset) )];
 #else
             if ( strncmp(type,"{_NSRect=",9) == 0 || strncmp(type,"{CGRect=",8) == 0 )
                 [args appendString:NSStringFromRect( va_arg(*argp,NSRect) )];
