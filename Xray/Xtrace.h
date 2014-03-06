@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#13 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#14 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -92,7 +92,7 @@
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
 
 // internal information
-#define ARGS_SUPPORTED 10
+#define XTRACE_ARGS_SUPPORTED 10
 
 typedef void (*VIMP)( id obj, SEL sel, ... );
 
@@ -107,7 +107,7 @@ struct _xtrace_info {
     Method method;
     VIMP before, original, after;
     const char *name, *type, *mtype;
-    struct _xtrace_arg args[ARGS_SUPPORTED+1];
+    struct _xtrace_arg args[XTRACE_ARGS_SUPPORTED+1];
 
     void *lastObj;
     struct _stats {

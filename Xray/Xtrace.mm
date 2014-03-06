@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#32 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#33 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -205,8 +205,9 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return NO;
 
         // warnings here are necessary evil
-        // contact me if you know how to
-        // maake them go away!
+        // but how do I suppress them??
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wall"
         APPEND_TYPE( 'B', @"%d", BOOL )
         APPEND_TYPE( 'c', @"%d", char )
         APPEND_TYPE( 'C', @"%d", unsigned char )
@@ -215,6 +216,7 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
         APPEND_TYPE( 'i', @"%d", int )
         APPEND_TYPE( 'I', @"%u", unsigned )
         APPEND_TYPE( 'f', @"%f", float )
+#pragma clang diagnostic pop
         APPEND_TYPE( 'd', @"%f", double )
         APPEND_TYPE( '^', @"%p", void * )
         APPEND_TYPE( '*', @"\"%.100s\"", char * )
@@ -528,7 +530,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 // break up selector by argument
 + (int)extractSelector:(const char *)name into:(struct _xtrace_arg *)args {
 
-    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+    for ( int i=0 ; i<XTRACE_ARGS_SUPPORTED ; i++ ) {
         args->name = name;
         const char *next = index( name, ':' );
         if ( next ) {
@@ -546,12 +548,12 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 
 // parse method encoding for call stack offsets (replaced by varargs)
 
-#if 1 // struct _original version using information in method type encoding
+#if 1 // original version using information in method type encoding
 
 + (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args {
     int frameLen = -1;
 
-    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+    for ( int i=0 ; i<XTRACE_ARGS_SUPPORTED ; i++ ) {
         args->type = type;
         while ( !isdigit(*type) )
             type++;
@@ -573,14 +575,14 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return -1;
 }
 
-#else // alternate less robust "NSGetSizeAndAlignment()" version
+#else // alternate "NSGetSizeAndAlignment()" version
 
 + (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args {
     NSUInteger size, align, offset = 0;
 
     type = NSGetSizeAndAlignment( type, &size, &align );
 
-    for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
+    for ( int i=0 ; i<XTRACE_ARGS_SUPPORTED ; i++ ) {
         while ( isdigit(*type) )
             type++;
         args->type = type;
