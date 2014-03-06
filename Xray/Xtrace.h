@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#10 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#13 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -30,6 +30,7 @@
 #ifdef DEBUG
 #ifdef __OBJC__
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 
 @interface NSObject(Xtrace)
 
@@ -66,8 +67,9 @@
 + (void)includeProperties:(BOOL)include;
 
 // include/exclude methods matching pattern
-+ (BOOL)includeMethods:(const char *)pattern;
-+ (BOOL)excludeMethods:(const char *)pattern;
++ (BOOL)includeMethods:(NSString *)pattern;
++ (BOOL)excludeMethods:(NSString *)pattern;
++ (BOOL)excludeTypes:(NSString *)pattern;
 
 // don't trace this class e.g. [UIView notrace]
 + (void)dontTrace:(Class)aClass;
@@ -89,13 +91,34 @@
 + (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
 
-struct _stats {
-    NSTimeInterval entered, elapsed;
-    unsigned callCount;
+// internal information
+#define ARGS_SUPPORTED 10
+
+typedef void (*VIMP)( id obj, SEL sel, ... );
+
+struct _xtrace_arg {
+    const char *name, *type;
+    int stackOffset;
 };
 
-// recorded stats
-+ (struct _stats *)statsFor:(Class)aClass sel:(SEL)sel;
+// information about original implementations
+struct _xtrace_info {
+    int depth;
+    Method method;
+    VIMP before, original, after;
+    const char *name, *type, *mtype;
+    struct _xtrace_arg args[ARGS_SUPPORTED+1];
+
+    void *lastObj;
+    struct _stats {
+        NSTimeInterval entered, elapsed;
+        unsigned callCount;
+    } stats;
+    BOOL logged, callingBack;
+};
+
+// includes argument info and recorded stats
++ (struct _xtrace_info *)infoFor:(Class)aClass sel:(SEL)sel;
 
 @end
 #endif

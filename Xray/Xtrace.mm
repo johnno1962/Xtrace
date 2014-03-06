@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#26 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#30 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -26,8 +26,6 @@
 #ifdef DEBUG
 
 #import "Xtrace.h"
-
-#import <objc/runtime.h>
 #import <map>
 
 #ifdef __clang__
@@ -43,10 +41,6 @@
 #define XTRACE_BRIDGE(_type) (_type)
 #define XTRACE_RETAINED
 #endif
-
-#define ARGS_SUPPORTED 10
-
-typedef void (*VIMP)( id obj, SEL sel, ... );
 
 @implementation NSObject(Xtrace)
 
@@ -70,7 +64,7 @@ typedef void (*VIMP)( id obj, SEL sel, ... );
 
 @implementation Xtrace
 
-static BOOL includeProperties, hideReturns, showArguments, describeValues, logToDelegate;
+static BOOL includeProperties, hideReturns, showArguments = YES, describeValues, logToDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
@@ -94,60 +88,29 @@ static id delegate;
     describeValues = desc;
 }
 
-extern "C" {
-    #include <regex.h>
-}
+static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
 
-#ifndef REG_ENHANCED
-#define REG_ENHANCED 0
-#endif
-
-static regex_t *includeMethods, *excludeMethods;
-
-+ (regex_t *)methodFilter:(const char *)pattern {
-    regex_t *methodFilter = new regex_t;
-    int error = regcomp(methodFilter, pattern, REG_ENHANCED);
-    if ( error ) {
-        char errbuff[PATH_MAX];
-        regerror( error, methodFilter, errbuff, sizeof errbuff );
-        NSLog( @"Xtrace: Filter compilation error: %s, in pattern: \"%s\"", errbuff, pattern );
-        delete methodFilter;
-        methodFilter = NULL;
-    }
++ (NSRegularExpression *)methodRegexp:(NSString *)pattern {
+    NSError *error = nil;
+    NSRegularExpression *methodFilter = [[NSRegularExpression alloc] initWithPattern:pattern options:0 error:&error];
+    if ( error )
+        NSLog( @"Xtrace: Filter compilation error: %@, in pattern: \"%@\"", [error localizedDescription], pattern );
     return methodFilter;
 }
 
-+ (BOOL)includeMethods:(const char *)pattern {
-    return (includeMethods = [self methodFilter:pattern]) != NULL;
++ (BOOL)includeMethods:(NSString *)pattern {
+    return (includeMethods = [self methodRegexp:pattern]) != NULL;
 }
 
-+ (BOOL)excludeMethods:(const char *)pattern {
-    return (excludeMethods = [self methodFilter:pattern]) != NULL;
++ (BOOL)excludeMethods:(NSString *)pattern {
+    return (excludeMethods = [self methodRegexp:pattern]) != NULL;
 }
 
-struct _arg {
-    const char *name, *type;
-    int stackOffset;
-};
++ (BOOL)excludeTypes:(NSString *)pattern {
+    return (excludeTypes = [self methodRegexp:pattern]) != NULL;
+}
 
-// information about original implementations
-class original {
-public:
-    Method method;
-    VIMP before, original, after;
-    const char *name, *type, *mtype;
-    struct _arg args[ARGS_SUPPORTED+1];
-
-    void *lastObj;
-    BOOL wasObj( void *thisObj ) {
-        return lastObj && thisObj == lastObj;
-    }
-
-    struct _stats stats;
-    BOOL callingBack;
-};
-
-static std::map<Class,std::map<SEL,original> > originals;
+static std::map<Class,std::map<SEL,struct _xtrace_info> > originals;
 static std::map<Class,BOOL> excludedClasses;
 static std::map<void *,BOOL> targets;
 static BOOL useTargets;
@@ -160,7 +123,7 @@ static int indent;
 }
 
 + (void)traceClass:(Class)aClass {
-    [self traceClass:aClass levels:100];
+    [self traceClass:aClass levels:10];
 }
 
 + (void)traceClass:(Class)aClass levels:(int)levels {
@@ -197,11 +160,14 @@ static int indent;
 }
 
 + (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
-    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL] ?
+    int depth = 0;
+    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL depth:&depth] ?
         (VIMP)[delegate methodForSelector:callback] : NULL;
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
+    int depth = 0;
+
     for ( int l=0 ; l<levels ; l++ ) {
 
         if ( excludedClasses.find(aClass) == excludedClasses.end() ) {
@@ -209,19 +175,19 @@ static int indent;
             Method *methods = class_copyMethodList(aClass, &mc);
 
             for( int i=0; methods && i<mc; i++ )
-                [self intercept:aClass method:methods[i] mtype:mtype];
+                [self intercept:aClass method:methods[i] mtype:mtype depth:&depth];
 
             free( methods );
         }
 
         aClass = class_getSuperclass(aClass);
-        if ( aClass == [NSObject class] || aClass == object_getClass([NSObject class]) )
+        if ( depth-- < 4 ) // don't trace NSObject
             break;
     }
 }
 
-+ (struct _stats *)statsFor:(Class)aClass sel:(SEL)sel {
-    return &originals[aClass][sel].stats;
++ (struct _xtrace_info *)infoFor:(Class)aClass sel:(SEL)sel {
+    return &originals[aClass][sel];
 }
 
 // delegate can implement as instance method
@@ -237,18 +203,15 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
         case 'V': case 'v':
             return NO;
-#if 0
-        case 'B':
-        case 'C': case 'c':
-        case 'S': case 's':
-#else
-        // warnings here necessary evil
+
+        // warnings here are necessary evil
+        // contact me if you know how to
+        // maake them go away!
         APPEND_TYPE( 'B', @"%d", BOOL )
         APPEND_TYPE( 'c', @"%d", char )
         APPEND_TYPE( 'C', @"%d", unsigned char )
         APPEND_TYPE( 's', @"%d", short )
         APPEND_TYPE( 'S', @"%d", unsigned short )
-#endif
         APPEND_TYPE( 'i', @"%d", int )
         APPEND_TYPE( 'I', @"%u", unsigned )
         APPEND_TYPE( 'f', @"%f", float )
@@ -314,32 +277,20 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
     return YES;
 }
 
-// necessary to catch messages to [super ...]
-static BOOL hasSuper( Class aClass, SEL sel ) {
-    while ( (aClass = class_getSuperclass( aClass )) )
-        if ( originals[aClass].find(sel) != originals[aClass].end() )
-            return YES;
-    return NO;
-}
-
-// find original implmentation for message and log call
-static original &findOriginal( id obj, SEL sel, ... ) {
+// find struct _original implmentation for message and log call
+static struct _xtrace_info &findOriginal( int depth, id obj, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
     Class aClass = object_getClass(obj);
     void *thisObj = XTRACE_BRIDGE(void *)obj;
 
-    while ( (aClass && originals[aClass].find(sel) == originals[aClass].end())
-           || (originals[aClass][sel].wasObj( thisObj ) && hasSuper(aClass, sel)) )
+    while ( originals[aClass].find(sel) == originals[aClass].end()
+           || originals[aClass][sel].depth != depth )
         aClass = class_getSuperclass( aClass );
 
-    original &orig = originals[aClass][sel];
+    struct _xtrace_info &orig = originals[aClass][sel];
 
-    orig.lastObj = thisObj;
-    orig.stats.callCount++;
-    orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
-
-    if ( !describing && orig.mtype &&
-        (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
+    if ( (orig.logged = !describing && orig.mtype &&
+        (!useTargets || targets.find(thisObj) != targets.end())) ) {
         NSMutableString *args = [NSMutableString string];
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
          orig.mtype, class_getName(object_getClass(obj)), obj];
@@ -350,7 +301,7 @@ static original &findOriginal( id obj, SEL sel, ... ) {
             const char *frame = (char *)(void *)&obj+sizeof obj;
             void *valptr = &sel;
 
-            for ( struct _arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
+            for ( struct _xtrace_arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
                 [args appendFormat:@" %.*s", (int)(aptr[1].name-aptr->name), aptr->name];
                 if ( !aptr->type )
                     break;
@@ -365,16 +316,19 @@ static original &findOriginal( id obj, SEL sel, ... ) {
         [logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
     }
 
+    orig.lastObj = thisObj;
+    orig.stats.callCount++;
+    orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
+
     return orig;
 }
 
 // log returning value
-static void returning( original &orig, ... ) {
+static void returning( struct _xtrace_info &orig, ... ) {
     va_list argp; va_start(argp, orig);
     indent && indent--;
 
-    if ( /*valptr &&*/ !hideReturns && !describing && orig.mtype &&
-        (!useTargets || targets.find(orig.lastObj) != targets.end()) ) {
+    if ( orig.logged && !hideReturns ) {
         NSMutableString *val = [NSMutableString string];
         [val appendFormat:@"%*s-> ", indent, ""];
         if ( formatValue(orig.type, NULL, &argp, val) ) {
@@ -384,7 +338,6 @@ static void returning( original &orig, ... ) {
     }
 
     orig.stats.elapsed = [NSDate timeIntervalSinceReferenceDate] - orig.stats.entered;
-    orig.lastObj = NULL;
 }
 
 #define ARG_SIZE sizeof(id) + sizeof(SEL) + sizeof(void *)*9 // something may be aligned
@@ -392,8 +345,9 @@ static void returning( original &orig, ... ) {
 #define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
 // replacement implmentations "swizzled" onto class
+template <int _depth>
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
-    original &orig = findOriginal(obj, sel, ARG_COPY);
+    struct _xtrace_info &orig = findOriginal(_depth, obj, sel, ARG_COPY);
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -412,9 +366,9 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     returning( orig );
 }
 
-template <typename _type>
+template <typename _type,int _depth>
 static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
-    original &orig = findOriginal(obj, sel, ARG_COPY);
+    struct _xtrace_info &orig = findOriginal(_depth, obj, sel, ARG_COPY);
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -436,82 +390,116 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return out;
 }
 
-+ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype {
++ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int *)depth {
     SEL sel = method_getName(method);
     const char *name = sel_getName(sel);
     const char *className = class_getName(aClass);
     const char *type = method_getTypeEncoding(method);
 
-    //NSLog( @"%s %s %s %s", mtype, className, name, type );
+    if ( !*depth )
+        for ( Class tClass = aClass ; tClass ; tClass = class_getSuperclass(tClass) )
+            (*depth)++;
 
     IMP newImpl = NULL;
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
         case 'V':
-        case 'v': newImpl = (IMP)vimpl; break;
-        case 'B': newImpl = (IMP)intercept<bool>; break;
+        case 'v':
+            switch (*depth%10) {
+                case 0: newImpl = (IMP)vimpl<0>; break;
+                case 1: newImpl = (IMP)vimpl<1>; break;
+                case 2: newImpl = (IMP)vimpl<2>; break;
+                case 3: newImpl = (IMP)vimpl<3>; break;
+                case 4: newImpl = (IMP)vimpl<4>; break;
+                case 5: newImpl = (IMP)vimpl<5>; break;
+                case 6: newImpl = (IMP)vimpl<6>; break;
+                case 7: newImpl = (IMP)vimpl<7>; break;
+                case 8: newImpl = (IMP)vimpl<9>; break;
+                case 9: newImpl = (IMP)vimpl<9>; break;
+            }
+            break;
+
+#define IMPLS( _type ) switch ( *depth%10 ) {\
+    case 0: newImpl = (IMP)intercept<_type,0>; break; \
+    case 1: newImpl = (IMP)intercept<_type,1>; break; \
+    case 2: newImpl = (IMP)intercept<_type,2>; break; \
+    case 3: newImpl = (IMP)intercept<_type,3>; break; \
+    case 4: newImpl = (IMP)intercept<_type,4>; break; \
+    case 5: newImpl = (IMP)intercept<_type,5>; break; \
+    case 6: newImpl = (IMP)intercept<_type,6>; break; \
+    case 7: newImpl = (IMP)intercept<_type,7>; break; \
+    case 8: newImpl = (IMP)intercept<_type,8>; break; \
+    case 9: newImpl = (IMP)intercept<_type,9>; break; \
+}
+
+        case 'B': IMPLS( bool ); break;
         case 'C':
-        case 'c': newImpl = (IMP)intercept<char>; break;
+        case 'c': IMPLS( char ); break;
         case 'S':
-        case 's': newImpl = (IMP)intercept<short>; break;
+        case 's': IMPLS( short ); break;
         case 'I':
-        case 'i': newImpl = (IMP)intercept<int>; break;
+        case 'i': IMPLS( int ); break;
         case 'Q':
         case 'q':
 #ifndef __LP64__
-            newImpl = (IMP)intercept<long long>; break;
+            IMPLS( long long ); break;
 #endif
         case 'L':
-        case 'l': newImpl = (IMP)intercept<long>; break;
-        case 'f': newImpl = (IMP)intercept<float>; break;
-        case 'd': newImpl = (IMP)intercept<double>; break;
+        case 'l': IMPLS( long ); break;
+        case 'f': IMPLS( float ); break;
+        case 'd': IMPLS( double ); break;
         case '#':
-        case '@': newImpl = (IMP)intercept<id>; break;
-        case '^': newImpl = (IMP)intercept<void *>; break;
-        case ':': newImpl = (IMP)intercept<SEL>; break;
-        case '*': newImpl = (IMP)intercept<char *>; break;
+        case '@': IMPLS( id ); break;
+        case '^': IMPLS( void * ); break;
+        case ':': IMPLS( SEL ); break;
+        case '*': IMPLS( char * ); break;
         case '{':
             if ( strncmp(type,"{_NSRange=",10) == 0 )
-                newImpl = (IMP)intercept<NSRange>;
+                IMPLS( NSRange )
 #ifndef __IPHONE_OS_VERSION_MIN_REQUIRED
             else if ( strncmp(type,"{_NSRect=",9) == 0 )
-                newImpl = (IMP)intercept<NSRect>;
+                IMPLS( NSRect )
             else if ( strncmp(type,"{_NSPoint=",10) == 0 )
-                newImpl = (IMP)intercept<NSPoint>;
+                IMPLS( NSPoint )
             else if ( strncmp(type,"{_NSSize=",9) == 0 )
-                newImpl = (IMP)intercept<NSSize>;
+                IMPLS( NSSize )
 #endif
             else if ( strncmp(type,"{CGRect=",8) == 0 )
-                newImpl = (IMP)intercept<CGRect>;
+                IMPLS( CGRect )
             else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                newImpl = (IMP)intercept<CGPoint>;
+                IMPLS( CGPoint )
             else if ( strncmp(type,"{CGSize=",8) == 0 )
-                newImpl = (IMP)intercept<CGSize>;
+                IMPLS( CGSize )
             else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                newImpl = (IMP)intercept<CGAffineTransform>;
+                IMPLS( CGAffineTransform )
             break;
         default:
             NSLog(@"Xtrace: Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
     }
 
+    NSString *methodName = [NSString stringWithUTF8String:name];
     const char *frameSize = type+1;
     while ( !isdigit(*frameSize) )
         frameSize++;
 
-    if ( atoi(frameSize) > ARG_SIZE )
+    if ( (includeMethods && ![self string:methodName matches:includeMethods]) ||
+        (excludeMethods && [self string:methodName matches:excludeMethods]) )
+        NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
+    else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
+        NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
+    else if ( atoi(frameSize) > ARG_SIZE )
         NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
               mtype, className, name );
-    else if ( newImpl && name[0] != '.' &&
+    else if ( newImpl && name[0] != '.' && //strcmp(name,"initialize") != 0 &&
              strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
              strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
-             (includeProperties || !mtype || !class_getProperty( aClass, name )) &&
-             (!includeMethods || regexec(includeMethods, name, 0, NULL, 0) != REG_NOMATCH) &&
-             (!excludeMethods || regexec(excludeMethods, name, 0, NULL, 0) == REG_NOMATCH) ) {
+             (includeProperties || !mtype || !class_getProperty( aClass, name )) ) {
 
-        original &orig = originals[aClass][sel];
+        struct _xtrace_info &orig = originals[aClass][sel];
 
         orig.name = name;
         orig.type = type;
         orig.method = method;
+        orig.depth = *depth%10;
         if ( mtype )
             orig.mtype = mtype;
 
@@ -522,6 +510,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         if ( impl != newImpl ) {
             orig.original = (VIMP)impl;
             method_setImplementation(method,newImpl);
+            //NSLog( @"%s %s %s %s", mtype, className, name, type );
         }
 
         return YES;
@@ -530,8 +519,12 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return NO;
 }
 
++ (BOOL)string:(NSString *)name matches:(NSRegularExpression *)regexp {
+    return [regexp rangeOfFirstMatchInString:name options:0 range:NSMakeRange(0, [name length])].location != NSNotFound;
+}
+
 // break up selector by argument
-+ (int)extractSelector:(const char *)name into:(struct _arg *)args {
++ (int)extractSelector:(const char *)name into:(struct _xtrace_arg *)args {
 
     for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
         args->name = name;
@@ -551,9 +544,9 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 
 // parse method encoding for call stack offsets (replaced by varargs)
 
-#if 1 // original version using information in method type encoding
+#if 1 // struct _original version using information in method type encoding
 
-+ (int)extractOffsets:(const char *)type into:(struct _arg *)args {
++ (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args {
     int frameLen = -1;
 
     for ( int i=0 ; i<ARGS_SUPPORTED ; i++ ) {
@@ -580,7 +573,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 
 #else // alternate less robust "NSGetSizeAndAlignment()" version
 
-+ (int)extractOffsets:(const char *)type into:(struct _arg *)args {
++ (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args {
     NSUInteger size, align, offset = 0;
 
     type = NSGetSizeAndAlignment( type, &size, &align );

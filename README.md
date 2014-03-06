@@ -48,8 +48,9 @@ You should also be able to switch to log the "description" of all values using:
 Other features are a method name filtering regular expression (which must be set
 before starting any tracing):
 
-	[Xtrace includeMethods:"a|regular|expression"];
-	[Xtrace excludeMethods:"WithObjects:$"]; // varargs methods don't work
+	[Xtrace includeMethods:@"a|regular|expression"];
+	[Xtrace excludeMethods:@"WithObjects:$"]; // varargs methods don't work
+	[Xtrace excludeTypes:@"CGRect|CGSize"]; // stack frame problems on 64 bits
 
 Classes can also be excluded (again before other classes are traced) by calling:
 
@@ -110,17 +111,15 @@ is a little contrived:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=1)
 
-Overall, Xtrace works better than you might expect though there are problems tracing UIView and UITableView
-and with 64bit builds in particular callbacks involving "struct" arguments.
+The only remaining known issue with Xtrace for 32 bit build are background color
+problems when tracing UIViews. On 64 bits you can expect some stack frame
+complications for methods with "struct" argument types particularly for
+arguments to callbacks.
 
 ### A few example combos:
 
-    // trace UI label instance excluding UIView methods
-    [UITableView notrace]; // tracing UIView not reliable
-    [UIView notrace]; // tracing UIView not reliable
-    [label xtrace];
-    
     // trace two instances
+    [UIView notrace];
     [label trace];
     [view trace];
 
@@ -128,7 +127,12 @@ and with 64bit builds in particular callbacks involving "struct" arguments.
     [view untrace];
     [label untrace];
 
-The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then 
+    #ifdef __LP64__ // these methods cause problems for 64 bit builds
+        [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+    #endif
+        [UITableView xtrace];
+
+The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 
 problems drop me a line on xtrace (at) johnholdsworth.com.
 

@@ -72,10 +72,10 @@
     //[Xtrace hideReturns:YES];
 
     [Xtrace showArguments:YES];
-#ifndef __LP64__ // problems
-    [UINavigationController xtrace];
-#else
+#ifdef __LP64__ // layout problems
     [UIViewController xtrace];
+#else
+    [UINavigationController xtrace];
 #endif
 
     // delegate must not be traced.
@@ -106,12 +106,18 @@
     [Xtrace forClass:[self class] after:@selector(frame:frame:rect:char:) callback:@selector(out:obj:frame:frame:rect:char:)];
     assert([self frame:111 frame:121 rect:a char:222]==0);
 
-    assert([Xtrace statsFor:[self class] sel:@selector(long:)]->callCount==1);
+    assert([Xtrace infoFor:[self class] sel:@selector(long:)]->stats.callCount==1);
+
+#ifdef __LP64__ // still some problems here for 64 bits
+    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+#endif
+    // on 32 bits tracing UIView cause background color problem still
+    [UIView notrace];
+    [UITableView xtrace];
     return YES;
 }
 							
 // testing ARC stack layout - seems very strange
-// NOTE: CGRect structures are logged backwards!
 
 - (void)simple {
     NSLog( @"simple %p %p", &self, &_cmd );
