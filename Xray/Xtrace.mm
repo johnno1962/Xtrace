@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#36 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#37 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -287,14 +287,19 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
     return YES;
 }
 
+struct _xtrace_depth {
+    int depth;
+    id obj;
+};
+
 // find struct _original implmentation for message and log call
-static struct _xtrace_info &findOriginal( int depth, id obj, SEL sel, ... ) {
+static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
-    Class aClass = object_getClass(obj);
-    void *thisObj = XTRACE_BRIDGE(void *)obj;
+    Class aClass = object_getClass( info->obj );
+    void *thisObj = XTRACE_BRIDGE(void *)info->obj;
 
     while ( originals[aClass].find(sel) == originals[aClass].end()
-           || originals[aClass][sel].depth != depth )
+           || originals[aClass][sel].depth != info->depth )
         aClass = class_getSuperclass( aClass );
 
     struct _xtrace_info &orig = originals[aClass][sel];
@@ -304,12 +309,12 @@ static struct _xtrace_info &findOriginal( int depth, id obj, SEL sel, ... ) {
         NSMutableString *args = [NSMutableString string];
 
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
-         orig.mtype, class_getName(object_getClass(obj)), obj];
+         orig.mtype, class_getName(object_getClass(info->obj)), info->obj];
 
         if ( !showArguments )
             [args appendFormat:@" %s", orig.name];
         else {
-            const char *frame = (char *)(void *)&obj+sizeof obj;
+            const char *frame = (char *)(void *)&info+sizeof info;
             void *valptr = &sel;
 
             for ( struct _xtrace_arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
@@ -359,7 +364,8 @@ static void returning( struct _xtrace_info &orig, ... ) {
 // "_depth" is number of levels down from NSObject
 template <int _depth>
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
-    struct _xtrace_info &orig = findOriginal(_depth, obj, sel, ARG_COPY);
+    struct _xtrace_depth info = { _depth, obj };
+    struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -380,7 +386,8 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
 
 template <typename _type,int _depth>
 static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
-    struct _xtrace_info &orig = findOriginal(_depth, obj, sel, ARG_COPY);
+    struct _xtrace_depth info = { _depth, obj };
+    struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
