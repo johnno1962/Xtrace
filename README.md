@@ -25,7 +25,8 @@ project's ".pch" file so you can access it's methods from anywhere in your proje
 There is a simple category based shortcut interface to start tracing:
 
 	[MyClass xtrace]; // to trace all calls to instances of a class
-	// this will intercet all methods of any superclasses as well
+	// this will intercept all methods of any superclasses as well
+    // but only for instances of the class that has been traced (v2.1)
 	
 	[instance xtrace]; // to trace all calls to a particular instance.
 	// multiple instances can by traced, use "notrace" to stop tracing
@@ -45,12 +46,13 @@ You should also be able to switch to log the "description" of all values using:
 
 	[Xtrace describeValues:YES];
 	
-Other features are a method name filtering regular expression (which must be set
-before starting any tracing):
+Other features are a method name filtering regular expression. These filters
+are applied as the class is "swizzled" when you request tracing.
 
 	[Xtrace includeMethods:@"a|regular|expression"];
 	[Xtrace excludeMethods:@"WithObjects:$"]; // varargs methods don't work
 	[Xtrace excludeTypes:@"CGRect|CGSize"]; // stack frame problems on 64 bits
+    [Xtrace excludeTypes:nil]; // reset filter after class is set up.
 
 Classes can also be excluded (again before other classes are traced) by calling:
 
@@ -111,10 +113,10 @@ is a little contrived:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=1)
 
-The only remaining known issue with Xtrace for 32 bit build are background color
-problems when tracing UIViews. On 64 bits you can expect some stack frame
-complications for methods with "struct" argument types particularly for
-arguments to callbacks.
+Reliability is now quite good considering for 32 bit builds. I've had to introduce
+a method exclusion blacklist of a few methods causing problems. On 64 bits 
+you can expect some stack frame complications for methods with "struct" argument 
+types - in particular for arguments to callbacks to the delegate.
 
 ### A few example combos:
 
@@ -127,10 +129,13 @@ arguments to callbacks.
     [view untrace];
     [label untrace];
 
-    #ifdef __LP64__ // these methods cause problems for 64 bit builds
+    #ifdef __LP64__ // these methods cause problems
         [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+    #else
+        [Xtrace excludeMethods:@"^drawRect:$"];
     #endif
         [UITableView xtrace];
+        [Xtrace excludeMethods:nil];
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 

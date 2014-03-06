@@ -46,6 +46,11 @@
     return text;
 }
 
+- (CGRect)out:(CGRect)out obj:(XRAppDelegate *)obj rect:(CGRect)rect shift:(int)offset {
+    out.origin.x += offset;
+    return out;
+}
+
 - (unsigned char)out:(unsigned char)out obj:(XRAppDelegate *)obj frame:(char)i1 frame:(char)i2 rect:(CGRect)a char:(unsigned char)i3 {
     NSLog( @"out:obj:frame:frame:rect:char: %d %d %d %d", out, i1, i2, i3 );
 #ifdef __LP64__
@@ -54,8 +59,13 @@
     return out-i3;
 }
 
+static NSString *expect;
+
 - (void)xtraceLog:(NSString *)trace {
     printf( "| %s\n", [trace UTF8String] );
+    if ( expect )
+        assert( [trace rangeOfString:expect].location != NSNotFound );
+    expect = nil;
 }
 
 @end
@@ -80,6 +90,9 @@
 
     // delegate must not be traced.
     [Xtrace setDelegate:application];
+
+    // this exploratory code has rather evolved into the unit tests...
+
     [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) callback:@selector(before:simple:i:i:)];
 
     CGRect a = {{111,222},{333,444}};
@@ -89,31 +102,60 @@
     [self simple:a i:11 i:22];
     [XRAppDelegate xtrace];
     [Xtrace forClass:[self class] after:@selector(i:i:simple:) callback:@selector(after:i:i:simple:)];
+
+    expect = @"> i:1 i:2 simple:{{99, 222}, {333, 444}}]";
     [self i:1 i:2 simple:a];
 
+    expect = @"> simple]";
     [self simple];
+
+    expect = @"> simple:{{99, 222}, {333, 444}}]";
     [self simple:a];
 
     [Xtrace forClass:[self class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
+
+    expect = @"> msg:<__NSCFConstantString 0x";
     assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
+#ifdef __LP64__
+    expect = @"> long:1L] q";
+#else
+    expect = @"> long:1L] l";
+#endif
     assert([self long:1L]==1);
+#ifdef __LP64__
+    expect = @"> longLong:1L] q";
+#else
+    expect = @"> longLong:1LL] q";
+#endif
     assert([self longLong:1LL]==1);
-
-    [Xtrace forClass:[self class] after:@selector(frame:frame:rect:char:) callback:@selector(out:obj:frame:frame:rect:char:)];
-    assert([self frame:111 frame:121 rect:a char:222]==0);
 
     assert([Xtrace infoFor:[self class] sel:@selector(long:)]->stats.callCount==1);
 
-#ifdef __LP64__ // still some problems here for 64 bits
-    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+    [Xtrace forClass:[self class] after:@selector(frame:frame:rect:char:) callback:@selector(out:obj:frame:frame:rect:char:)];
+
+    expect = @"> frame:111 frame:121 rect:{{99, 222}, {333, 444}} char:222]";
+    assert([self frame:111 frame:121 rect:a char:222]==0);
+
+    [Xtrace forClass:[self class] after:@selector(rect:shift:) callback:@selector(out:obj:rect:shift:)];
+
+#ifndef __LP64__
+    expect = @"> rect:{{99, 222}, {333, 444}} shift:1]";
 #endif
-    // on 32 bits tracing UIView cause background color problem still
+    assert([self rect:a shift:1].origin.x==a.origin.x+1);
+
+#ifdef __LP64__ // still some problems here for 64 bit
     [UIView notrace];
+    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+#else
+    // for some reason tracing drawRect: is a problem
+    [Xtrace excludeMethods:@"^drawRect:$"];
+#endif
     [UITableView xtrace];
+    [Xtrace excludeMethods:nil];
     return YES;
 }
 							
@@ -142,6 +184,10 @@
 
 - (NSString *)msg:(NSString *)msg {
     return msg;
+}
+
+- (CGRect)rect:(CGRect)rect shift:(int)offset {
+    return rect;
 }
 
 - (long)long:(unsigned long)l {

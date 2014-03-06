@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#37 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#40 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -89,8 +89,11 @@ static id delegate;
 }
 
 static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
+static NSString *methodBlackList = @"^(_UIAppearance_|drawRect:$)|WithObjects(AndKeys)?:$";
 
 + (NSRegularExpression *)methodRegexp:(NSString *)pattern {
+    if ( !pattern )
+        return nil;
     NSError *error = nil;
     NSRegularExpression *methodFilter = [[NSRegularExpression alloc] initWithPattern:pattern options:0 error:&error];
     if ( error )
@@ -111,9 +114,9 @@ static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
 }
 
 static std::map<Class,std::map<SEL,struct _xtrace_info> > originals;
-static std::map<Class,BOOL> excludedClasses;
-static std::map<void *,BOOL> targets;
-static BOOL useTargets;
+static std::map<Class,BOOL> tracedClasses, excludedClasses;
+static std::map<void *,BOOL> tracedInstances;
+static BOOL tracingInstances;
 static int indent;
 
 + (void)dontTrace:(Class)aClass {
@@ -133,15 +136,15 @@ static int indent;
 }
 
 + (void)traceInstance:(id)instance {
-    targets[XTRACE_BRIDGE(void *)instance] = 1;
+    tracedInstances[XTRACE_BRIDGE(void *)instance] = 1;
     [self traceClass:[instance class]];
-    useTargets = YES;
+    tracingInstances = YES;
 }
 
 + (void)untrace:(id)instance {
-    auto i = targets.find(XTRACE_BRIDGE(void *)instance);
-    if ( i != targets.end() )
-        targets.erase(i);
+    auto i = tracedInstances.find(XTRACE_BRIDGE(void *)instance);
+    if ( i != tracedInstances.end() )
+        tracedInstances.erase(i);
 }
 
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
@@ -175,6 +178,7 @@ static int indent;
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
     int depth = [self depth:aClass];
+    tracedClasses[aClass] = 1;
 
     for ( int l=0 ; l<levels ; l++ ) {
 
@@ -283,29 +287,39 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return YES;
     }
 
-    [args appendString:@"<??>"];
+    [args appendFormat:@"<?? %s>", type];
     return YES;
 }
 
 struct _xtrace_depth {
-    int depth;
-    id obj;
+    int depth; id obj; SEL sel;
 };
+
+static id dummyImpl( id obj, SEL sel, ... ) {
+    return nil;
+}
 
 // find struct _original implmentation for message and log call
 static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
     Class aClass = object_getClass( info->obj );
-    void *thisObj = XTRACE_BRIDGE(void *)info->obj;
 
-    while ( originals[aClass].find(sel) == originals[aClass].end()
-           || originals[aClass][sel].depth != info->depth )
+    while ( aClass && (originals[aClass].find(sel) == originals[aClass].end() ||
+                       originals[aClass][sel].depth != info->depth) )
         aClass = class_getSuperclass( aClass );
 
     struct _xtrace_info &orig = originals[aClass][sel];
+    void *thisObj = XTRACE_BRIDGE(void *)info->obj;
+
+    if ( !aClass ) {
+        NSLog( @"Xtrace: could not find original implementation for %s", sel_getName(info->sel) );
+        orig.original = (VIMP)dummyImpl;
+    }
 
     if ( (orig.logged = !describing && orig.mtype &&
-        (!useTargets || targets.find(thisObj) != targets.end())) ) {
+          (!tracingInstances ?
+           tracedClasses.find([info->obj class]) != tracedClasses.end() :
+           tracedInstances.find(thisObj) != tracedInstances.end())) ) {
         NSMutableString *args = [NSMutableString string];
 
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
@@ -362,9 +376,10 @@ static void returning( struct _xtrace_info &orig, ... ) {
 
 // replacement implmentations "swizzled" onto class
 // "_depth" is number of levels down from NSObject
+// (used to detect calls to super)
 template <int _depth>
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
-    struct _xtrace_depth info = { _depth, obj };
+    struct _xtrace_depth info = { _depth, obj, sel };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
     if ( orig.before && !orig.callingBack ) {
@@ -373,7 +388,8 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
         orig.callingBack = NO;
     }
 
-    orig.original( obj, sel, ARG_COPY );
+    if ( orig.original )
+        orig.original( obj, sel, ARG_COPY );
 
     if ( orig.after && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -386,7 +402,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
 
 template <typename _type,int _depth>
 static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
-    struct _xtrace_depth info = { _depth, obj };
+    struct _xtrace_depth info = { _depth, obj, sel };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
     if ( orig.before && !orig.callingBack ) {
@@ -496,14 +512,22 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     while ( !isdigit(*frameSize) )
         frameSize++;
 
-    if ( (includeMethods && ![self string:methodName matches:includeMethods]) ||
-        (excludeMethods && [self string:methodName matches:excludeMethods]) )
+    // yes, this is a hack
+    if ( !excludeMethods )
+        [self excludeMethods:methodBlackList];
+
+    // filters applied only when not a callback registration (mtype == NULL)
+    if ( ((includeMethods && ![self string:methodName matches:includeMethods]) ||
+        (excludeMethods && [self string:methodName matches:excludeMethods])) && mtype )
         NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
-    else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
+
+    else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) && mtype )
         NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
+
     else if ( atoi(frameSize) > ARG_SIZE )
         NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
               mtype, className, name );
+
     else if ( newImpl && name[0] != '.' && //strcmp(name,"initialize") != 0 &&
              strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
              strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
