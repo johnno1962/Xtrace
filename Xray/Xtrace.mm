@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#30 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#31 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -413,7 +413,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
                 case 5: newImpl = (IMP)vimpl<5>; break;
                 case 6: newImpl = (IMP)vimpl<6>; break;
                 case 7: newImpl = (IMP)vimpl<7>; break;
-                case 8: newImpl = (IMP)vimpl<9>; break;
+                case 8: newImpl = (IMP)vimpl<8>; break;
                 case 9: newImpl = (IMP)vimpl<9>; break;
             }
             break;

@@ -108,9 +108,6 @@
 
     assert([Xtrace infoFor:[self class] sel:@selector(long:)]->stats.callCount==1);
 
-#ifdef __LP64__ // still some problems here for 64 bits
-    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
-#endif
     // on 32 bits tracing UIView cause background color problem still
     [UIView notrace];
     [UITableView xtrace];
