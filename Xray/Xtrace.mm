@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#31 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#32 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -292,6 +292,7 @@ static struct _xtrace_info &findOriginal( int depth, id obj, SEL sel, ... ) {
     if ( (orig.logged = !describing && orig.mtype &&
         (!useTargets || targets.find(thisObj) != targets.end())) ) {
         NSMutableString *args = [NSMutableString string];
+
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
          orig.mtype, class_getName(object_getClass(obj)), obj];
 
@@ -345,6 +346,7 @@ static void returning( struct _xtrace_info &orig, ... ) {
 #define ARG_COPY a0, a1, a2, a3, a4, a5, a6, a7, a8, a9
 
 // replacement implmentations "swizzled" onto class
+// "_depth" is number of levels down from NSObject
 template <int _depth>
 static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_info &orig = findOriginal(_depth, obj, sel, ARG_COPY);

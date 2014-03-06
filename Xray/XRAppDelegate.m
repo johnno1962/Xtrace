@@ -8,7 +8,7 @@
 
 #import "XRAppDelegate.h"
 
-@implementation UIApplication(XtraceDelegate)
+@implementation UIApplication(XtraceDelegate_TestCallbacks)
 
 - (void)before:(XRAppDelegate *)obj simple:(CGRect)a i:(int)i1 i:(int)i2 {
     NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
@@ -108,6 +108,9 @@
 
     assert([Xtrace infoFor:[self class] sel:@selector(long:)]->stats.callCount==1);
 
+#ifdef __LP64__ // still some problems here for 64 bits
+    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+#endif
     // on 32 bits tracing UIView cause background color problem still
     [UIView notrace];
     [UITableView xtrace];

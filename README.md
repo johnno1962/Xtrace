@@ -37,9 +37,9 @@ most common configurations of OS X and iOS applications. The starting point is t
 XRAppDelegate.m class. The XRDetailViewController.m then switches to instance viewing
 of a specific UILabel when the detail view loads.
 
-Though it is less robust, you can enable display of method arguments as follows:
+Display of method arguments is now on by default, but if you have problems:
 
-	[Xtrace showArguments:YES];
+	[Xtrace showArguments:NO];
 	
 You should also be able to switch to log the "description" of all values using:
 
