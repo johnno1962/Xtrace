@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#33 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#36 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -160,13 +160,21 @@ static int indent;
 }
 
 + (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
-    int depth = 0;
-    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL depth:&depth] ?
+    int depth = [self depth:aClass];
+    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL depth:depth] ?
         (VIMP)[delegate methodForSelector:callback] : NULL;
 }
 
-+ (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
++ (int)depth:(Class)aClass {
     int depth = 0;
+    for ( Class tClass = aClass ; tClass != [NSObject class] &&
+         tClass != object_getClass([NSObject class] ) ; tClass = class_getSuperclass(tClass) )
+        depth++;
+    return depth;
+}
+
++ (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
+    int depth = [self depth:aClass];
 
     for ( int l=0 ; l<levels ; l++ ) {
 
@@ -175,13 +183,13 @@ static int indent;
             Method *methods = class_copyMethodList(aClass, &mc);
 
             for( int i=0; methods && i<mc; i++ )
-                [self intercept:aClass method:methods[i] mtype:mtype depth:&depth];
+                [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
 
             free( methods );
         }
 
         aClass = class_getSuperclass(aClass);
-        if ( depth-- < 4 ) // don't trace NSObject
+        if ( !--depth ) // don't trace NSObject
             break;
     }
 }
@@ -394,21 +402,17 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     return out;
 }
 
-+ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int *)depth {
++ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int)depth {
     SEL sel = method_getName(method);
     const char *name = sel_getName(sel);
     const char *className = class_getName(aClass);
     const char *type = method_getTypeEncoding(method);
 
-    if ( !*depth )
-        for ( Class tClass = aClass ; tClass ; tClass = class_getSuperclass(tClass) )
-            (*depth)++;
-
     IMP newImpl = NULL;
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
         case 'V':
         case 'v':
-            switch (*depth%10) {
+            switch (depth%10) {
                 case 0: newImpl = (IMP)vimpl<0>; break;
                 case 1: newImpl = (IMP)vimpl<1>; break;
                 case 2: newImpl = (IMP)vimpl<2>; break;
@@ -422,7 +426,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
             }
             break;
 
-#define IMPLS( _type ) switch ( *depth%10 ) {\
+#define IMPLS( _type ) switch ( depth%10 ) {\
     case 0: newImpl = (IMP)intercept<_type,0>; break; \
     case 1: newImpl = (IMP)intercept<_type,1>; break; \
     case 2: newImpl = (IMP)intercept<_type,2>; break; \
@@ -503,7 +507,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         orig.name = name;
         orig.type = type;
         orig.method = method;
-        orig.depth = *depth%10;
+        orig.depth = depth%10;
         if ( mtype )
             orig.mtype = mtype;
 
@@ -514,7 +518,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
         if ( impl != newImpl ) {
             orig.original = (VIMP)impl;
             method_setImplementation(method,newImpl);
-            //NSLog( @"%s %s %s %s", mtype, className, name, type );
+            //NSLog( @"%d %s%s %s %s", depth, mtype, className, name, type );
         }
 
         return YES;
