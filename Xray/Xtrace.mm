@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#40 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#41 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -388,8 +388,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
         orig.callingBack = NO;
     }
 
-    if ( orig.original )
-        orig.original( obj, sel, ARG_COPY );
+    orig.original( obj, sel, ARG_COPY );
 
     if ( orig.after && !orig.callingBack ) {
         orig.callingBack = YES;

@@ -29,7 +29,7 @@ There is a simple category based shortcut interface to start tracing:
     // but only for instances of the class that has been traced (v2.1)
 	
 	[instance xtrace]; // to trace all calls to a particular instance.
-	// multiple instances can by traced, use "notrace" to stop tracing
+	// multiple instances can by traced, use "untrace" to stop tracing
     // instance tracing takes precedence over class based filtering.
 	
 The example project, originally called "Xray" will show you how to use the Xtrace module
