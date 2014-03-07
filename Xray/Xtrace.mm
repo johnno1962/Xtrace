@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#41 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#43 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -316,14 +316,15 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         orig.original = (VIMP)dummyImpl;
     }
 
+    aClass = object_getClass( info->obj );
     if ( (orig.logged = !describing && orig.mtype &&
           (!tracingInstances ?
-           tracedClasses.find([info->obj class]) != tracedClasses.end() :
+           tracedClasses.find(aClass) != tracedClasses.end() :
            tracedInstances.find(thisObj) != tracedInstances.end())) ) {
         NSMutableString *args = [NSMutableString string];
 
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
-         orig.mtype, class_getName(object_getClass(info->obj)), info->obj];
+         orig.mtype, class_getName(aClass), info->obj];
 
         if ( !showArguments )
             [args appendFormat:@" %s", orig.name];
@@ -448,7 +449,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
             }
             break;
 
-#define IMPLS( _type ) switch ( depth%10 ) {\
+#define IMPLS( _type ) switch ( depth%10 ) { \
     case 0: newImpl = (IMP)intercept<_type,0>; break; \
     case 1: newImpl = (IMP)intercept<_type,1>; break; \
     case 2: newImpl = (IMP)intercept<_type,2>; break; \
