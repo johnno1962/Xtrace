@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#47 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#48 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -35,14 +35,15 @@
 #endif
 
 #ifdef XTRACE_ISARC
+#define XTRACE_UNSAFE __unsafe_unretained
 #define XTRACE_BRIDGE(_type) (__bridge _type)
 #define XTRACE_RETAINED __attribute((ns_returns_retained))
 #else
+#define XTRACE_UNSAFE
 #define XTRACE_BRIDGE(_type) (_type)
 #define XTRACE_RETAINED
 #endif
 
-static NSString *methodBlacklist = @"^(_UIAppearance_|_hasBaseline|timeIntervalSinceReferenceDate|drawRect:$)|WithObjects(AndKeys)?:$";
 static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
 
 @implementation NSObject(Xtrace)
@@ -170,8 +171,8 @@ static int indent;
 
 + (int)depth:(Class)aClass {
     int depth = 0;
-    Class nsObject = [NSObject class], nsObjectMeta = object_getClass( nsObject );
-    for ( ; aClass && aClass != nsObject && aClass != nsObjectMeta ; aClass = class_getSuperclass( aClass ) )
+    for ( Class nsObject = [NSObject class], nsObjectMeta = object_getClass( nsObject ) ;
+         aClass && aClass != nsObject && aClass != nsObjectMeta ; aClass = class_getSuperclass( aClass ) )
         depth++;
     return depth;
 }
@@ -181,7 +182,7 @@ static int indent;
 
     // yes, this is a hack
     if ( !excludeMethods )
-        [self excludeMethods:methodBlacklist];
+        [self excludeMethods:@XTRACE_EXCLUSIONS];
 
     int depth = [self depth:aClass];
     for ( int l=0 ; l<levels ; l++ ) {
@@ -203,9 +204,10 @@ static int indent;
                 else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
                     NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
 
-                else if ( [nameStr hasPrefix:@"."] || [nameStr hasPrefix:@"init"] || //
+                else if ( [nameStr hasPrefix:@"."] || //[nameStr hasPrefix:@"init"] || //
                          [nameStr isEqualToString:@"retain"] || [nameStr isEqualToString:@"release"] ||
-                         [nameStr isEqualToString:@"dealloc"] || [nameStr isEqualToString:@"description"] )
+                         [nameStr isEqualToString:@"dealloc"] || [nameStr hasPrefix:@"_dealloc"] ||
+                         [nameStr isEqualToString:@"description"] )
                    ; // best avoided
 
                 else if (includeProperties || !class_getProperty( aClass, name ))
@@ -257,7 +259,7 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return NO;
 
         // warnings here are necessary evil
-        // but how do I suppress them??
+        // but how does one suppress them??
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wall"
         APPEND_TYPE( 'B', @"%d", BOOL )
@@ -327,15 +329,15 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return YES;
     }
 
-    [args appendFormat:@"<?? %.100s>", type];
+    [args appendFormat:@"<?? %.50s>", type];
     return YES;
 }
 
 struct _xtrace_depth {
-    int depth; id obj; SEL sel;
+    int depth; XTRACE_UNSAFE id obj; SEL sel;
 };
 
-static id dummyImpl( id obj, SEL sel, ... ) {
+static id nullImpl( id obj, SEL sel, ... ) {
     return nil;
 }
 
@@ -353,7 +355,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 
     if ( !aClass ) {
         NSLog( @"Xtrace: could not find original implementation for %s", sel_getName(info->sel) );
-        orig.original = (VIMP)dummyImpl;
+        orig.original = (VIMP)nullImpl;
     }
 
     aClass = object_getClass( info->obj );
@@ -382,7 +384,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         }
 
         // add custom filtering of logging here..
-        [args appendFormat:@"] %s %p", orig.type, orig.original];
+        [args appendFormat:@"] %.50s %p", orig.type, orig.original];
         [logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
     }
 
@@ -417,8 +419,8 @@ static void returning( struct _xtrace_info &orig, ... ) {
 // replacement implmentations "swizzled" onto class
 // "_depth" is number of levels down from NSObject
 // (used to detect calls to super)
-template <int _depth>
-static void vimpl( id obj, SEL sel, ARG_DEFS ) {
+template <typename _type, int _depth>
+static void vintercept( id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_depth info = { _depth, obj, sel };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
@@ -439,7 +441,7 @@ static void vimpl( id obj, SEL sel, ARG_DEFS ) {
     returning( orig );
 }
 
-template <typename _type,int _depth>
+template <typename _type, int _depth>
 static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_depth info = { _depth, obj, sel };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
@@ -472,75 +474,63 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
 
     IMP newImpl = NULL;
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
-        case 'V':
-        case 'v':
-            switch (depth%10) {
-                case 0: newImpl = (IMP)vimpl<0>; break;
-                case 1: newImpl = (IMP)vimpl<1>; break;
-                case 2: newImpl = (IMP)vimpl<2>; break;
-                case 3: newImpl = (IMP)vimpl<3>; break;
-                case 4: newImpl = (IMP)vimpl<4>; break;
-                case 5: newImpl = (IMP)vimpl<5>; break;
-                case 6: newImpl = (IMP)vimpl<6>; break;
-                case 7: newImpl = (IMP)vimpl<7>; break;
-                case 8: newImpl = (IMP)vimpl<8>; break;
-                case 9: newImpl = (IMP)vimpl<9>; break;
-            }
-            break;
 
-#define IMPLS( _type ) switch ( depth%10 ) { \
-    case 0: newImpl = (IMP)intercept<_type,0>; break; \
-    case 1: newImpl = (IMP)intercept<_type,1>; break; \
-    case 2: newImpl = (IMP)intercept<_type,2>; break; \
-    case 3: newImpl = (IMP)intercept<_type,3>; break; \
-    case 4: newImpl = (IMP)intercept<_type,4>; break; \
-    case 5: newImpl = (IMP)intercept<_type,5>; break; \
-    case 6: newImpl = (IMP)intercept<_type,6>; break; \
-    case 7: newImpl = (IMP)intercept<_type,7>; break; \
-    case 8: newImpl = (IMP)intercept<_type,8>; break; \
-    case 9: newImpl = (IMP)intercept<_type,9>; break; \
+#define IMPLS( _func, _type ) \
+switch ( depth%10 ) { \
+    case 0: newImpl = (IMP)_func<_type,0>; break; \
+    case 1: newImpl = (IMP)_func<_type,1>; break; \
+    case 2: newImpl = (IMP)_func<_type,2>; break; \
+    case 3: newImpl = (IMP)_func<_type,3>; break; \
+    case 4: newImpl = (IMP)_func<_type,4>; break; \
+    case 5: newImpl = (IMP)_func<_type,5>; break; \
+    case 6: newImpl = (IMP)_func<_type,6>; break; \
+    case 7: newImpl = (IMP)_func<_type,7>; break; \
+    case 8: newImpl = (IMP)_func<_type,8>; break; \
+    case 9: newImpl = (IMP)_func<_type,9>; break; \
 }
+        case 'V':
+        case 'v': IMPLS( vintercept, void ); break;
 
-        case 'B': IMPLS( bool ); break;
+        case 'B': IMPLS( intercept, bool ); break;
         case 'C':
-        case 'c': IMPLS( char ); break;
+        case 'c': IMPLS( intercept, char ); break;
         case 'S':
-        case 's': IMPLS( short ); break;
+        case 's': IMPLS( intercept, short ); break;
         case 'I':
-        case 'i': IMPLS( int ); break;
+        case 'i': IMPLS( intercept, int ); break;
         case 'Q':
         case 'q':
 #ifndef __LP64__
-            IMPLS( long long ); break;
+            IMPLS( intercept, long long ); break;
 #endif
         case 'L':
-        case 'l': IMPLS( long ); break;
-        case 'f': IMPLS( float ); break;
-        case 'd': IMPLS( double ); break;
+        case 'l': IMPLS( intercept, long ); break;
+        case 'f': IMPLS( intercept, float ); break;
+        case 'd': IMPLS( intercept, double ); break;
         case '#':
-        case '@': IMPLS( id ); break;
-        case '^': IMPLS( void * ); break;
-        case ':': IMPLS( SEL ); break;
-        case '*': IMPLS( char * ); break;
+        case '@': IMPLS( intercept, id ) break;
+        case '^': IMPLS( intercept, void * ); break;
+        case ':': IMPLS( intercept, SEL ); break;
+        case '*': IMPLS( intercept, char * ); break;
         case '{':
             if ( strncmp(type,"{_NSRange=",10) == 0 )
-                IMPLS( NSRange )
+                IMPLS( intercept, NSRange )
 #ifndef __IPHONE_OS_VERSION_MIN_REQUIRED
             else if ( strncmp(type,"{_NSRect=",9) == 0 )
-                IMPLS( NSRect )
+                IMPLS( intercept, NSRect )
             else if ( strncmp(type,"{_NSPoint=",10) == 0 )
-                IMPLS( NSPoint )
+                IMPLS( intercept, NSPoint )
             else if ( strncmp(type,"{_NSSize=",9) == 0 )
-                IMPLS( NSSize )
+                IMPLS( intercept, NSSize )
 #endif
             else if ( strncmp(type,"{CGRect=",8) == 0 )
-                IMPLS( CGRect )
+                IMPLS( intercept, CGRect )
             else if ( strncmp(type,"{CGPoint=",9) == 0 )
-                IMPLS( CGPoint )
+                IMPLS( intercept, CGPoint )
             else if ( strncmp(type,"{CGSize=",8) == 0 )
-                IMPLS( CGSize )
+                IMPLS( intercept, CGSize )
             else if ( strncmp(type,"{CGAffineTransform=",19) == 0 )
-                IMPLS( CGAffineTransform )
+                IMPLS( intercept, CGAffineTransform )
             break;
         default:
             NSLog(@"Xtrace: Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
