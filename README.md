@@ -31,7 +31,9 @@ There is a simple category based shortcut interface to start tracing:
 	[instance xtrace]; // to trace all calls to a particular instance.
 	// multiple instances can by traced, use "untrace" to stop tracing
     // instance tracing takes precedence over class based filtering.
-	
+    
+    [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
+
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
 most common configurations of OS X and iOS applications. The starting point is the

@@ -8,9 +8,11 @@
 
 #import "XRAppDelegate.h"
 
-@implementation UIApplication(XtraceDelegate_TestCallbacks)
+@interface XtraceCallbacks : NSObject
+@end
+@implementation XtraceCallbacks
 
-- (void)before:(XRAppDelegate *)obj simple:(CGRect)a i:(int)i1 i:(int)i2 {
++ (void)before:(XRAppDelegate *)obj simple:(CGRect)a i:(int)i1 i:(int)i2 {
     NSLog( @"before:simple:i:i: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
     assert(i1==11);
     assert(i2==22);
@@ -21,7 +23,7 @@
 #endif
 }
 
-- (void)after:(XRAppDelegate *)obj i:(int)i1 i:(int)i2 simple:(CGRect)a {
++ (void)after:(XRAppDelegate *)obj i:(int)i1 i:(int)i2 simple:(CGRect)a {
     NSLog( @"after:i:i:simple: %p %p %p %p %p %d %d %@", &self, &_cmd, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
     assert(i1==1);
     assert(i2==2);
@@ -32,26 +34,26 @@
 #endif
 }
 
-- (NSString *)after:(NSString *)out obj:(XRAppDelegate *)obj msg:(NSString *)msg {
++ (NSString *)after:(NSString *)out obj:(XRAppDelegate *)obj msg:(NSString *)msg {
     NSLog( @"after:obj:msg: %@ -> %@", msg, out );
     return [NSString stringWithFormat:@"%@, %@", out, @"hello aspect"];
 }
 
-- (void)label:(UILabel *)label setText:(NSString *)text {
++ (void)label:(UILabel *)label setText:(NSString *)text {
     label.textColor = [UIColor redColor];
 }
 
-- (NSString *)out:(NSString *)text labelText:(UILabel *)label {
++ (NSString *)out:(NSString *)text labelText:(UILabel *)label {
     NSLog(@"UILabel text: %@", text);
     return text;
 }
 
-- (CGRect)out:(CGRect)out obj:(XRAppDelegate *)obj rect:(CGRect)rect shift:(int)offset {
++ (CGRect)out:(CGRect)out obj:(XRAppDelegate *)obj rect:(CGRect)rect shift:(int)offset {
     out.origin.x += offset;
     return out;
 }
 
-- (unsigned char)out:(unsigned char)out obj:(XRAppDelegate *)obj frame:(char)i1 frame:(char)i2 rect:(CGRect)a char:(unsigned char)i3 {
++ (unsigned char)out:(unsigned char)out obj:(XRAppDelegate *)obj frame:(char)i1 frame:(char)i2 rect:(CGRect)a char:(unsigned char)i3 {
     NSLog( @"out:obj:frame:frame:rect:char: %d %d %d %d", out, i1, i2, i3 );
 #ifdef __LP64__
     i3 = 222; // frame problem on 64 bits
@@ -61,7 +63,7 @@
 
 static NSString *expect;
 
-- (void)xtraceLog:(NSString *)trace {
++ (void)xtraceLog:(NSString *)trace {
     printf( "| %s\n", [trace UTF8String] );
     if ( expect )
         assert( [trace rangeOfString:expect].location != NSNotFound );
@@ -89,7 +91,7 @@ static NSString *expect;
 #endif
 
     // delegate must not be traced.
-    [Xtrace setDelegate:application];
+    [Xtrace setDelegate:[XtraceCallbacks class]];
 
     // this exploratory code has rather evolved into the unit tests...
 
@@ -156,6 +158,11 @@ static NSString *expect;
 #endif
     [UITableView xtrace];
     [Xtrace excludeMethods:nil];
+
+#ifndef __LP64__
+    // go on then, just trace the lot...
+    [Xtrace traceClassPattern:@"^UI" excluding:nil];
+#endif
     return YES;
 }
 							

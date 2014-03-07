@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#43 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#47 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -41,6 +41,9 @@
 #define XTRACE_BRIDGE(_type) (_type)
 #define XTRACE_RETAINED
 #endif
+
+static NSString *methodBlacklist = @"^(_UIAppearance_|_hasBaseline|timeIntervalSinceReferenceDate|drawRect:$)|WithObjects(AndKeys)?:$";
+static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
 
 @implementation NSObject(Xtrace)
 
@@ -88,29 +91,26 @@ static id delegate;
     describeValues = desc;
 }
 
-static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
-static NSString *methodBlackList = @"^(_UIAppearance_|drawRect:$)|WithObjects(AndKeys)?:$";
-
-+ (NSRegularExpression *)methodRegexp:(NSString *)pattern {
-    if ( !pattern )
-        return nil;
-    NSError *error = nil;
-    NSRegularExpression *methodFilter = [[NSRegularExpression alloc] initWithPattern:pattern options:0 error:&error];
-    if ( error )
-        NSLog( @"Xtrace: Filter compilation error: %@, in pattern: \"%@\"", [error localizedDescription], pattern );
-    return methodFilter;
-}
-
 + (BOOL)includeMethods:(NSString *)pattern {
-    return (includeMethods = [self methodRegexp:pattern]) != NULL;
+    return (includeMethods = [self getRegexp:pattern]) != NULL;
 }
 
 + (BOOL)excludeMethods:(NSString *)pattern {
-    return (excludeMethods = [self methodRegexp:pattern]) != NULL;
+    return (excludeMethods = [self getRegexp:pattern]) != NULL;
 }
 
 + (BOOL)excludeTypes:(NSString *)pattern {
-    return (excludeTypes = [self methodRegexp:pattern]) != NULL;
+    return (excludeTypes = [self getRegexp:pattern]) != NULL;
+}
+
++ (NSRegularExpression *)getRegexp:(NSString *)pattern {
+    if ( !pattern )
+        return nil;
+    NSError *error = nil;
+    NSRegularExpression *regexp = [[NSRegularExpression alloc] initWithPattern:pattern options:0 error:&error];
+    if ( error )
+        NSLog( @"Xtrace: Filter compilation error: %@, in pattern: \"%@\"", [error localizedDescription], pattern );
+    return regexp;
 }
 
 static std::map<Class,std::map<SEL,struct _xtrace_info> > originals;
@@ -170,25 +170,49 @@ static int indent;
 
 + (int)depth:(Class)aClass {
     int depth = 0;
-    for ( Class tClass = aClass ; tClass != [NSObject class] &&
-         tClass != object_getClass([NSObject class] ) ; tClass = class_getSuperclass(tClass) )
+    Class nsObject = [NSObject class], nsObjectMeta = object_getClass( nsObject );
+    for ( ; aClass && aClass != nsObject && aClass != nsObjectMeta ; aClass = class_getSuperclass( aClass ) )
         depth++;
     return depth;
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
-    int depth = [self depth:aClass];
-    tracedClasses[aClass] = 1;
+    tracedClasses[aClass] = 0;
 
+    // yes, this is a hack
+    if ( !excludeMethods )
+        [self excludeMethods:methodBlacklist];
+
+    int depth = [self depth:aClass];
     for ( int l=0 ; l<levels ; l++ ) {
 
-        if ( excludedClasses.find(aClass) == excludedClasses.end() ) {
+        if ( !tracedClasses[aClass] && excludedClasses.find(aClass) == excludedClasses.end() ) {
             unsigned mc = 0;
+            const char *className = class_getName(aClass);
             Method *methods = class_copyMethodList(aClass, &mc);
 
-            for( int i=0; methods && i<mc; i++ )
-                [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
+           for( int i=0; methods && i<mc; i++ ) {
+                const char *type = method_getTypeEncoding(methods[i]);
+                const char *name = sel_getName(method_getName(methods[i]));
+                NSString *nameStr = [NSString stringWithUTF8String:name];
 
+               if ( ((includeMethods && ![self string:nameStr matches:includeMethods]) ||
+                      (excludeMethods && [self string:nameStr matches:excludeMethods])) )
+                    NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
+
+                else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
+                    NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
+
+                else if ( [nameStr hasPrefix:@"."] || [nameStr hasPrefix:@"init"] || //
+                         [nameStr isEqualToString:@"retain"] || [nameStr isEqualToString:@"release"] ||
+                         [nameStr isEqualToString:@"dealloc"] || [nameStr isEqualToString:@"description"] )
+                   ; // best avoided
+
+                else if (includeProperties || !class_getProperty( aClass, name ))
+                    [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
+            }
+
+            tracedClasses[aClass] = 1;
             free( methods );
         }
 
@@ -198,11 +222,27 @@ static int indent;
     }
 }
 
++ (void)traceClassPattern:(NSString *)pattern excluding:(NSString *)exclusions {
+    NSRegularExpression *include = [self getRegexp:pattern], *exclude = [self getRegexp:exclusions];
+    unsigned ccount;
+    Class *classes = objc_copyClassList( &ccount );
+    for ( unsigned i=0 ; i<ccount ; i++ ) {
+        NSString *className = [NSString stringWithUTF8String:class_getName(classes[i])];
+        if ( [self string:className matches:include] && (!exclude || ![self string:className matches:exclude]) )
+            [self traceClass:classes[i]];
+    }
+    free( classes );
+}
+
++ (BOOL)string:(NSString *)name matches:(NSRegularExpression *)regexp {
+    return [regexp rangeOfFirstMatchInString:name options:0 range:NSMakeRange(0, [name length])].location != NSNotFound;
+}
+
 + (struct _xtrace_info *)infoFor:(Class)aClass sel:(SEL)sel {
     return &originals[aClass][sel];
 }
 
-// delegate can implement as instance method
+// delegate implements as instance method
 + (void)xtraceLog:(NSString *)trace {
     printf( "| %s\n", [trace UTF8String] );
 }
@@ -287,7 +327,7 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return YES;
     }
 
-    [args appendFormat:@"<?? %s>", type];
+    [args appendFormat:@"<?? %.100s>", type];
     return YES;
 }
 
@@ -318,8 +358,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 
     aClass = object_getClass( info->obj );
     if ( (orig.logged = !describing && orig.mtype &&
-          (!tracingInstances ?
-           tracedClasses.find(aClass) != tracedClasses.end() :
+          (!tracingInstances ? tracedClasses[aClass] :
            tracedInstances.find(thisObj) != tracedInstances.end())) ) {
         NSMutableString *args = [NSMutableString string];
 
@@ -507,31 +546,14 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
             NSLog(@"Xtrace: Unsupported return type: %s for: %s[%s %s]", type, mtype, className, name);
     }
 
-    NSString *methodName = [NSString stringWithUTF8String:name];
     const char *frameSize = type+1;
     while ( !isdigit(*frameSize) )
         frameSize++;
 
-    // yes, this is a hack
-    if ( !excludeMethods )
-        [self excludeMethods:methodBlackList];
+    if ( atoi(frameSize) > ARG_SIZE )
+        NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]", mtype, className, name );
 
-    // filters applied only when not a callback registration (mtype == NULL)
-    if ( ((includeMethods && ![self string:methodName matches:includeMethods]) ||
-        (excludeMethods && [self string:methodName matches:excludeMethods])) && mtype )
-        NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
-
-    else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) && mtype )
-        NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
-
-    else if ( atoi(frameSize) > ARG_SIZE )
-        NSLog( @"Xtrace: Stack frame too large to trace method: %s[%s %s]",
-              mtype, className, name );
-
-    else if ( newImpl && name[0] != '.' && //strcmp(name,"initialize") != 0 &&
-             strcmp(name,"retain") != 0 && strcmp(name,"release") != 0 &&
-             strcmp(name,"dealloc") != 0 && strcmp(name,"description") != 0 &&
-             (includeProperties || !mtype || !class_getProperty( aClass, name )) ) {
+    else if ( newImpl ) {
 
         struct _xtrace_info &orig = originals[aClass][sel];
 
@@ -556,10 +578,6 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     }
 
     return NO;
-}
-
-+ (BOOL)string:(NSString *)name matches:(NSRegularExpression *)regexp {
-    return [regexp rangeOfFirstMatchInString:name options:0 range:NSMakeRange(0, [name length])].location != NSNotFound;
 }
 
 // break up selector by argument
