@@ -152,15 +152,12 @@ static NSString *expect;
 #ifdef __LP64__ // still some problems here for 64 bit
     [UIView notrace];
     [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
-#else
-    // for some reason tracing drawRect: is a problem
-    [Xtrace excludeMethods:@"^drawRect:$"];
 #endif
     [UITableView xtrace];
     [Xtrace excludeMethods:nil];
 
 #ifndef __LP64__
-    // go on then, just trace the lot...
+    // go on then, let's just trace the lot...
     [Xtrace traceClassPattern:@"^UI" excluding:nil];
 #endif
     return YES;

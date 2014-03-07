@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#48 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#49 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -27,24 +27,6 @@
 
 #import "Xtrace.h"
 #import <map>
-
-#ifdef __clang__
-#if __has_feature(objc_arc)
-#define XTRACE_ISARC
-#endif
-#endif
-
-#ifdef XTRACE_ISARC
-#define XTRACE_UNSAFE __unsafe_unretained
-#define XTRACE_BRIDGE(_type) (__bridge _type)
-#define XTRACE_RETAINED __attribute((ns_returns_retained))
-#else
-#define XTRACE_UNSAFE
-#define XTRACE_BRIDGE(_type) (_type)
-#define XTRACE_RETAINED
-#endif
-
-static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
 
 @implementation NSObject(Xtrace)
 
@@ -92,6 +74,8 @@ static id delegate;
     describeValues = desc;
 }
 
+static NSRegularExpression *includeMethods, *excludeMethods, *excludeTypes;
+
 + (BOOL)includeMethods:(NSString *)pattern {
     return (includeMethods = [self getRegexp:pattern]) != NULL;
 }
@@ -116,7 +100,7 @@ static id delegate;
 
 static std::map<Class,std::map<SEL,struct _xtrace_info> > originals;
 static std::map<Class,BOOL> tracedClasses, excludedClasses;
-static std::map<void *,BOOL> tracedInstances;
+static std::map<XTRACE_UNSAFE id,BOOL> tracedInstances;
 static BOOL tracingInstances;
 static int indent;
 
@@ -137,13 +121,13 @@ static int indent;
 }
 
 + (void)traceInstance:(id)instance {
-    tracedInstances[XTRACE_BRIDGE(void *)instance] = 1;
     [self traceClass:[instance class]];
+    tracedInstances[instance] = 1;
     tracingInstances = YES;
 }
 
 + (void)untrace:(id)instance {
-    auto i = tracedInstances.find(XTRACE_BRIDGE(void *)instance);
+    auto i = tracedInstances.find(instance);
     if ( i != tracedInstances.end() )
         tracedInstances.erase(i);
 }
@@ -204,11 +188,16 @@ static int indent;
                 else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
                     NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
 
-                else if ( [nameStr hasPrefix:@"."] || //[nameStr hasPrefix:@"init"] || //
+                else if ( name[0] == '.' || // [nameStr hasPrefix:@"init"] || //
                          [nameStr isEqualToString:@"retain"] || [nameStr isEqualToString:@"release"] ||
                          [nameStr isEqualToString:@"dealloc"] || [nameStr hasPrefix:@"_dealloc"] ||
                          [nameStr isEqualToString:@"description"] )
-                   ; // best avoided
+                    ; // best avoided
+
+#ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
+                else if ( aClass == [UIView class] && [nameStr isEqualToString:@"drawRect:"] )
+                    ; // no idea why this is a problem...
+#endif
 
                 else if (includeProperties || !class_getProperty( aClass, name ))
                     [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
@@ -351,7 +340,6 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         aClass = class_getSuperclass( aClass );
 
     struct _xtrace_info &orig = originals[aClass][sel];
-    void *thisObj = XTRACE_BRIDGE(void *)info->obj;
 
     if ( !aClass ) {
         NSLog( @"Xtrace: could not find original implementation for %s", sel_getName(info->sel) );
@@ -361,7 +349,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
     aClass = object_getClass( info->obj );
     if ( (orig.logged = !describing && orig.mtype &&
           (!tracingInstances ? tracedClasses[aClass] :
-           tracedInstances.find(thisObj) != tracedInstances.end())) ) {
+           tracedInstances.find(info->obj) != tracedInstances.end())) ) {
         NSMutableString *args = [NSMutableString string];
 
         [args appendFormat:@"%*s%s[<%s %p>", indent++, "",
@@ -388,9 +376,9 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         [logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
     }
 
-    orig.lastObj = thisObj;
     orig.stats.callCount++;
     orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
+    orig.lastObj = info->obj;
 
     return orig;
 }

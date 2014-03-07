@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#16 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#17 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -32,7 +32,23 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 
-#define XTRACE_EXCLUSIONS "^(allocWithZone:|initWithCoder:|_UIAppearance_|_hasBaseline|timeIntervalSinceReferenceDate|drawRect:$)|WithObjects(AndKeys)?:$"
+#ifdef __clang__
+#if __has_feature(objc_arc)
+#define XTRACE_ISARC
+#endif
+#endif
+
+#ifdef XTRACE_ISARC
+#define XTRACE_UNSAFE __unsafe_unretained
+#define XTRACE_BRIDGE(_type) (__bridge _type)
+#define XTRACE_RETAINED __attribute((ns_returns_retained))
+#else
+#define XTRACE_UNSAFE
+#define XTRACE_BRIDGE(_type) (_type)
+#define XTRACE_RETAINED
+#endif
+
+#define XTRACE_EXCLUSIONS "^(allocWithZone:|initWithCoder:|_UIAppearance_|_hasBaseline|timeIntervalSinceReferenceDate)|WithObjects(AndKeys)?:$"
 
 @interface NSObject(Xtrace)
 
@@ -110,11 +126,11 @@ struct _xtrace_arg {
 struct _xtrace_info {
     int depth;
     Method method;
+    XTRACE_UNSAFE id lastObj;
     VIMP before, original, after;
     const char *name, *type, *mtype;
     struct _xtrace_arg args[XTRACE_ARGS_SUPPORTED+1];
 
-    void *lastObj;
     struct _stats {
         NSTimeInterval entered, elapsed;
         unsigned callCount;
