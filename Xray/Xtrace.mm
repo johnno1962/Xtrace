@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#49 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#50 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -111,7 +111,7 @@ static int indent;
 }
 
 + (void)traceClass:(Class)aClass {
-    [self traceClass:aClass levels:10];
+    [self traceClass:aClass levels:99];
 }
 
 + (void)traceClass:(Class)aClass levels:(int)levels {
@@ -183,7 +183,7 @@ static int indent;
 
                if ( ((includeMethods && ![self string:nameStr matches:includeMethods]) ||
                       (excludeMethods && [self string:nameStr matches:excludeMethods])) )
-                    NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
+                   ;//NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
 
                 else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
                     NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
@@ -194,7 +194,7 @@ static int indent;
                          [nameStr isEqualToString:@"description"] )
                     ; // best avoided
 
-#ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
+#if !defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(INJECTION_AUTOLOAD)
                 else if ( aClass == [UIView class] && [nameStr isEqualToString:@"drawRect:"] )
                     ; // no idea why this is a problem...
 #endif
@@ -463,18 +463,14 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     IMP newImpl = NULL;
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
 
+#define IMPL_COUNT 5
 #define IMPLS( _func, _type ) \
-switch ( depth%10 ) { \
+switch ( depth%IMPL_COUNT ) { \
     case 0: newImpl = (IMP)_func<_type,0>; break; \
     case 1: newImpl = (IMP)_func<_type,1>; break; \
     case 2: newImpl = (IMP)_func<_type,2>; break; \
     case 3: newImpl = (IMP)_func<_type,3>; break; \
     case 4: newImpl = (IMP)_func<_type,4>; break; \
-    case 5: newImpl = (IMP)_func<_type,5>; break; \
-    case 6: newImpl = (IMP)_func<_type,6>; break; \
-    case 7: newImpl = (IMP)_func<_type,7>; break; \
-    case 8: newImpl = (IMP)_func<_type,8>; break; \
-    case 9: newImpl = (IMP)_func<_type,9>; break; \
 }
         case 'V':
         case 'v': IMPLS( vintercept, void ); break;
@@ -538,7 +534,7 @@ switch ( depth%10 ) { \
         orig.name = name;
         orig.type = type;
         orig.method = method;
-        orig.depth = depth%10;
+        orig.depth = depth%IMPL_COUNT;
         if ( mtype )
             orig.mtype = mtype;
 
