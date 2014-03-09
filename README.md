@@ -36,8 +36,7 @@ There is a simple category based shortcut interface to start tracing:
     
 As an alternative ot building Xtrace into your project, Xtrace is now included 
 in the "code injection" plugin from [http://injectionforxcode.com](http://injectionforxcode.com).
-Once you have injected. Once you have injected, these xtrace methods are available
-for you to use in lldb.
+Once you have injected, all xtrace methods are available for you to use in lldb.
 
     (lldb) p [UITableView xtrace]
 
