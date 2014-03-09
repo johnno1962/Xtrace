@@ -77,6 +77,8 @@ static NSString *expect;
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
+    [Xtrace dumpClass:[UITableView class]];
+    [Xtrace dumpClass:[UIView class]];
 
     // the various options..
     //[Xtrace methodFilter:"^set"];

@@ -29,10 +29,31 @@ There is a simple category based shortcut interface to start tracing:
     // but only for instances of the class that has been traced (v2.1)
 	
 	[instance xtrace]; // to trace all calls to a particular instance.
-	// multiple instances can by traced, use "untrace" to stop tracing
+	// multiple instances can by traced, use "notrace" to stop tracing
     // instance tracing takes precedence over class based filtering.
     
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
+    
+As an alternative ot building Xtrace into your project, Xtrace is now included 
+in the "code injection" plugin from [http://injectionforxcode.com](http://injectionforxcode.com).
+Once you have injected. Once you have injected, these xtrace methods are available
+for you to use in lldb.
+
+    (lldb) p [UITableView xtrace]
+
+    // dump pseudo-header for class
+    (lldb) p [UITableView xdump]
+    @interface UITableView : UIScrollView {
+        id<UITableViewDataSource> _dataSource; // @"<UITableViewDataSource>"
+        UITableViewRowData * _rowData; // @"UITableViewRowData"
+        float _rowHeight; // f
+        float _sectionHeaderHeight; // f
+        float _sectionFooterHeight; // f
+        float _estimatedRowHeight; // f
+        float _estimatedSectionHeaderHeight; // f
+        float _estimatedSectionFooterHeight; // f
+        CGRect _visibleBounds; // {CGRect="origin"{CGPoint="x"f"y"f}"size"{CGSize="width"f"height"f}}
+    ...
 
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
@@ -128,13 +149,11 @@ types - in particular for arguments to callbacks to the delegate.
     [view trace];
 
     // stop tracing them
-    [view untrace];
-    [label untrace];
-
+    [view notrace];
+    [label notrace];
+    
     #ifdef __LP64__ // these methods cause problems
         [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
-    #else
-        [Xtrace excludeMethods:@"^drawRect:$"];
     #endif
         [UITableView xtrace];
         [Xtrace excludeMethods:nil];
