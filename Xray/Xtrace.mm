@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#56 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#57 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -467,7 +467,7 @@ static _type XTRACE_RETAINED intercept( id obj, SEL sel, ARG_DEFS ) {
     IMP newImpl = NULL;
     switch ( type[0] == 'r' ? type[1] : type[0] ) {
 
-#define IMPL_COUNT 5
+#define IMPL_COUNT 10
 #define IMPLS( _func, _type ) \
 switch ( depth%IMPL_COUNT ) { \
     case 0: newImpl = (IMP)_func<_type,0>; break; \
@@ -475,6 +475,11 @@ switch ( depth%IMPL_COUNT ) { \
     case 2: newImpl = (IMP)_func<_type,2>; break; \
     case 3: newImpl = (IMP)_func<_type,3>; break; \
     case 4: newImpl = (IMP)_func<_type,4>; break; \
+    case 5: newImpl = (IMP)_func<_type,5>; break; \
+    case 6: newImpl = (IMP)_func<_type,6>; break; \
+    case 7: newImpl = (IMP)_func<_type,7>; break; \
+    case 8: newImpl = (IMP)_func<_type,8>; break; \
+    case 9: newImpl = (IMP)_func<_type,9>; break; \
 }
         case 'V':
         case 'v': IMPLS( vintercept, void ); break;
