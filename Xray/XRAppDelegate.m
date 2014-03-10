@@ -159,8 +159,8 @@ static NSString *expect;
     [Xtrace excludeMethods:nil];
 
 #ifndef __LP64__
-    // go on then, let's just trace the lot...
-    [Xtrace traceClassPattern:@"^UI" excluding:nil];
+    // go on then, let's just trace (almost) the lot...
+    [Xtrace traceClassPattern:@"^UI" excluding:@"UIKeyboardCandidateUtilities"];
 #endif
     return YES;
 }

@@ -56,7 +56,7 @@ Once you have injected, all xtrace methods are available for you to use in lldb.
 
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
-most common configurations of OS X and iOS applications. The starting point is the
+32 bit configurations of OS X and iOS applications. The starting point is the
 XRAppDelegate.m class. The XRDetailViewController.m then switches to instance viewing
 of a specific UILabel when the detail view loads.
 
@@ -133,7 +133,7 @@ is a little contrived:
 
 ### What works:
 
-![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=1)
+![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=2)
 
 Reliability is now quite good considering for 32 bit builds. I've had to introduce
 a method exclusion blacklist of a few methods causing problems. On 64 bits 
