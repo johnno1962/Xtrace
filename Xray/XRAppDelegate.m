@@ -153,7 +153,7 @@ static NSString *expect;
 
 #ifdef __LP64__ // still some problems here for 64 bit
     [UIView notrace];
-    [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
+    [Xtrace excludeMethods:@"^(hit|indexPath|set)|"XTRACE_EXCLUSIONS];
 #endif
     [UITableView xtrace];
     [Xtrace excludeMethods:nil];
