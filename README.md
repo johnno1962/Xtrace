@@ -34,8 +34,8 @@ There is a simple category based shortcut interface to start tracing:
     
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
     
-As an alternative ot building Xtrace into your project, Xtrace is now included 
-in the "code injection" plugin from [http://injectionforxcode.com](http://injectionforxcode.com).
+As an alternative to building Xtrace into your project, Xtrace is now included
+in the "code injection" plugin from [injectionforxcode.com](http://injectionforxcode.com).
 Once you have injected, all xtrace methods are available for you to use in lldb.
 
     (lldb) p [UITableView xtrace]
