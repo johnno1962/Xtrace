@@ -86,11 +86,7 @@ static NSString *expect;
     //[Xtrace hideReturns:YES];
 
     [Xtrace showArguments:YES];
-#ifdef __LP64__ // layout problems
-    [UIViewController xtrace];
-#else
     [UINavigationController xtrace];
-#endif
 
     // delegate must not be traced.
     [Xtrace setDelegate:[XtraceCallbacks class]];
@@ -151,17 +147,8 @@ static NSString *expect;
 #endif
     assert([self rect:a shift:1].origin.x==a.origin.x+1);
 
-#ifdef __LP64__ // still some problems here for 64 bit
-    [UIView notrace];
-    [Xtrace excludeMethods:@"^(hit|indexPath|set)|"XTRACE_EXCLUSIONS];
-#endif
-    [UITableView xtrace];
-    [Xtrace excludeMethods:nil];
-
-#ifndef __LP64__
     // go on then, let's just trace (almost) the lot...
     [Xtrace traceClassPattern:@"^UI" excluding:@"UIKeyboardCandidateUtilities"];
-#endif
     return YES;
 }
 							
