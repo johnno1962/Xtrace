@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#65 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#66 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -800,6 +800,35 @@ switch ( depth%IMPL_COUNT ) { \
         return [NSString stringWithFormat:@"id<%.*s>", (int)(end-type), type];
     else
         return [NSString stringWithFormat:@"%.*s%s", (int)(end-type), type, star];
+}
+
++ (NSArray *)profile {
+    NSMutableArray *profile = [NSMutableArray array];
+
+    for ( auto &byClass : originals )
+        for ( auto &bySel : byClass.second ) {
+            Xtrace *trace = [Xtrace new];
+            trace->aClass = byClass.first;
+            trace->info = &bySel.second;
+            trace->elapsed = bySel.second.stats.elapsed;
+            bySel.second.stats.elapsed = 0;
+            [profile addObject:trace];
+        }
+
+    [profile sortUsingSelector:@selector(compareElapsed:)];
+    return profile;
+}
+
++ (void)dumpProfile:(int)count dp:(int)decimalPlaces {
+    NSArray *profile = [self profile];
+    for ( int i=0 ; i<count ; i++ ) {
+        Xtrace *trace = [profile objectAtIndex:i];
+        printf( "%.*f\t%s[%s %s]\n", decimalPlaces, trace->elapsed, trace->info->mtype, class_getName(trace->aClass), trace->info->name );
+    }
+}
+
+- (NSComparisonResult)compareElapsed:(Xtrace *)other {
+    return self->elapsed > other->elapsed ? NSOrderedAscending : self->elapsed == other->elapsed ? NSOrderedSame : NSOrderedDescending;
 }
 
 @end

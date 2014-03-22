@@ -34,7 +34,7 @@ There is a simple category based shortcut interface to start tracing:
     
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
 
-If you have the [XcodeColors](https://github.com/robbiehanson/XcodeColors) plugin
+If you have the [XcodeColors](https://github.com/johnno1962/XcodeColors) plugin
 installed you can now color traces by class or group of classes:
 
     [Xtrace useColor:"\033[fg255,0,0;" forClass:[UITableView class]];
