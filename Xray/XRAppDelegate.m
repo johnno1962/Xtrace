@@ -78,7 +78,6 @@ static NSString *expect;
 {
     // Override point for customization after application launch.
     [Xtrace dumpClass:[UITableView class]];
-    [Xtrace dumpClass:[UIView class]];
 
     // the various options..
     //[Xtrace methodFilter:"^set"];
@@ -88,7 +87,7 @@ static NSString *expect;
     [Xtrace showArguments:YES];
     [UINavigationController xtrace];
 
-    // delegate must not be traced.
+    // delegate must not have been traced.
     [Xtrace setDelegate:[XtraceCallbacks class]];
 
     // this exploratory code has rather evolved into the unit tests...
@@ -116,6 +115,7 @@ static NSString *expect;
 
     expect = @"> msg:<__NSCFConstantString 0x";
     assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
+    NSLog( @"Caller: %s", [Xtrace callerFor:[self class] sel:@selector(msg:)] );
 
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
@@ -147,8 +147,18 @@ static NSString *expect;
 #endif
     assert([self rect:a shift:1].origin.x==a.origin.x+1);
 
-    // go on then, let's just trace (almost) the lot...
-    [Xtrace traceClassPattern:@"^UI" excluding:@"UIKeyboardCandidateUtilities"];
+    // go on then, let's just trace the lot...
+    [Xtrace traceClassPattern:@"^UI" excluding:nil];
+
+#if 0
+    // For use with the "XcodeColors" plugin.
+    // https://github.com/robbiehanson/XcodeColors
+    [Xtrace useColor:XTRACE_RED forClass:[UITableViewCell class]];
+    [Xtrace useColor:"\033[fg200,0,200;" forClass:[UIScreen class]];
+    [Xtrace useColor:"\033[fg0,200,0;" forClass:[UIWindow class]];
+    [Xtrace useColor:"\033[fg0,200,100;" forClass:[UILabel class]];
+#endif
+
     return YES;
 }
 							

@@ -33,7 +33,15 @@ There is a simple category based shortcut interface to start tracing:
     // instance tracing takes precedence over class based filtering.
     
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
+
+If you have the [XcodeColors](https://github.com/robbiehanson/XcodeColors) plugin
+installed you can now color traces by class or group of classes:
+
+    [Xtrace useColor:"\033[fg255,0,0;" forClass:[UITableView class]];
     
+    // or to color all subsequent traces:
+    [Xtrace useColor:"\033[fg0,255,0;"]; // "fg" or "bg" then RRR,GGG,BBB;
+
 As an alternative to building Xtrace into your project, Xtrace is now included
 in the "code injection" plugin from [injectionforxcode.com](http://injectionforxcode.com).
 Once you have injected, all xtrace methods are available for you to use in lldb.
@@ -159,7 +167,8 @@ types - in particular for arguments to callbacks to the delegate.
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 
-problems drop me a line on xtrace (at) johnholdsworth.com.
+problems drop me a line on xtrace (at) johnholdsworth.com. The developer of Xtrace and the
+"Injection Plugin" is available for Cocoa/iOS development work in the London area.
 
 Announcements of major commits to the repo will be made on twitter [@Injection4Xcode](https://twitter.com/#!/@Injection4Xcode).
 
