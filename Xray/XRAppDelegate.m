@@ -147,9 +147,6 @@ static NSString *expect;
 #endif
     assert([self rect:a shift:1].origin.x==a.origin.x+1);
 
-    // go on then, let's just trace the lot...
-    [Xtrace traceClassPattern:@"^UI" excluding:nil];
-
 #if 0
     // For use with the "XcodeColors" plugin.
     // https://github.com/robbiehanson/XcodeColors
@@ -157,7 +154,12 @@ static NSString *expect;
     [Xtrace useColor:"\033[fg200,0,200;" forClass:[UIScreen class]];
     [Xtrace useColor:"\033[fg0,200,0;" forClass:[UIWindow class]];
     [Xtrace useColor:"\033[fg0,200,100;" forClass:[UILabel class]];
+
+    [Xtrace useColor:"\033[fg100,100,0;"];
 #endif
+
+    // go on then, let's just trace the lot...
+    [Xtrace traceClassPattern:@"^UI" excluding:nil];
 
     return YES;
 }
