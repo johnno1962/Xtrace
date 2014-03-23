@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#72 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#73 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -834,9 +834,12 @@ switch ( depth%IMPL_COUNT ) { \
     NSArray *profile = [self profile];
     for ( int i=0 ; i<count && i<[profile count] ; i++ ) {
         Xtrace *trace = [profile objectAtIndex:i];
-        printf( "%.*f/%-4d %s[%s %s]\n",
-               decimalPlaces, trace->elapsed, trace->callCount,
-               trace->info->mtype, class_getName(trace->aClass), trace->info->name );
+        if ( !trace->info->color )
+            trace->info->color = noColor;
+        printf( "%s%.*f/%-4d %s[%s %s]%s\n",
+               trace->info->color, decimalPlaces, trace->elapsed, trace->callCount,
+               trace->info->mtype, class_getName(trace->aClass), trace->info->name,
+               trace->info->color[0] ? "\033[;" : "" );
     }
 }
 

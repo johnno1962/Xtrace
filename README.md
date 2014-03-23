@@ -80,12 +80,30 @@ are applied as the class is "swizzled" when you request tracing.
 	[Xtrace excludeMethods:@"WithObjects:$"]; // varargs methods don't work
 	[Xtrace excludeTypes:@"CGRect|CGSize"]; // stack frame problems on 64 bits
     [Xtrace excludeTypes:nil]; // reset filter after class is set up.
-
+    
 Classes can also be excluded (again before other classes are traced) by calling:
 
     [UIView notrace]; // or alternatively..
 	[Xtrace dontTrace:[UIView class]];
     
+A rudimentary profiling interface is also available:
+
+    [Xtrace dumpProfile:100 dp:6]; // top 100 elapsed time to 6 decimal places
+    
+    1.318244/2    [UIApplication sendAction:to:from:forEvent:]
+    0.725028/2    [UIWindow sendEvent:]
+    0.706975/2    [UIWindow _sendTouchesForEvent:]
+    0.701802/1    [UIControl touchesEnded:withEvent:]
+    0.699627/2    [UIControl _sendActionsForEvents:withEvent:]
+    0.659325/1    [UIControl sendAction:to:forEvent:]
+    0.659292/1    [UIApplication sendAction:toTarget:fromSender:forEvent:]
+    0.659204/1    [UIBarButtonItem _sendAction:withEvent:]
+    0.659082/1    [UIViewController _toggleEditing:]
+    0.659071/1    [UITableViewController setEditing:animated:]
+    0.593577/53   [CALayer layoutSublayers]
+    0.592025/53   [UIView layoutSublayersOfLayer:]
+    ...
+
 Finally, callbacks can also be registered on a delegate to be called before or after any method is called:
 
     [Xtrace setDelegate:delegate]; // delegate must not be traced itself
@@ -140,10 +158,10 @@ is a little contrived:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=2)
 
-Reliability is now quite good considering for 32 bit builds. I've had to introduce
+Reliability is now quite good for 32 bit builds considering.. I've had to introduce
 a method exclusion blacklist of a few methods causing problems. On 64 bits 
 you can expect some stack frame complications for methods with "struct" argument 
-types - in particular for arguments to callbacks to the delegate.
+or return types - in particular for arguments to callbacks to the delegate.
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 

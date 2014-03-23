@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#26 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#27 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -123,7 +123,7 @@ struct _xtrace_info {
 
 // implementing class
 @interface Xtrace : NSObject {
-@package
+@public
     Class aClass;
     struct _xtrace_info *info;
     NSTimeInterval elapsed;
@@ -178,18 +178,20 @@ struct _xtrace_info {
 // dump runtime class info
 + (void)dumpClass:(Class)aClass;
 
+// simple profiling interface
++ (NSArray *)profile;
++ (void)dumpProfile:(int)count dp:(int)decimalPlaces;
+
 // before, replacement and after callbacks to delegate
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
 
-// includes argument info and recorded stats
+// get parsed argument info and recorded stats
 + (struct _xtrace_info *)infoFor:(Class)aClass sel:(SEL)sel;
-+ (const char *)callerFor:(Class)aClass sel:(SEL)sel;
 
-// simple profiling interface
-+ (NSArray *)profile;
-+ (void)dumpProfile:(int)count dp:(int)decimalPlaces;
+// name the caller of the specified method
++ (const char *)callerFor:(Class)aClass sel:(SEL)sel;
 
 @end
 #endif
