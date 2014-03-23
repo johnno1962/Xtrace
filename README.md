@@ -6,7 +6,7 @@ Xtrace is a header Xtrace.h and a C++ implementation file Xtrace.mm that allows
 you to intercept all method calls to instances of a class or a particular instance
 giving you output such as this:
 
-![Icon](http://injectionforxcode.johnholdsworth.com/xtracec.png)
+![Icon](http://injectionforxcode.johnholdsworth.com/xtracec.png?flush=1)
 
 To use, add Xtrace.{h,mm} to your project and add an import of Xtrace.h to your
 project's ".pch" file so you can access it's methods from anywhere in your project.
