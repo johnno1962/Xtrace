@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#25 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#26 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -154,6 +154,7 @@ struct _xtrace_info {
 + (void)useColor:(const char *)color;
 
 // finer grain control of color
++ (void)useColor:(const char *)color forSelector:(SEL)sel;
 + (void)useColor:(const char *)color forClass:(Class)aClass;
 
 // don't trace this class e.g. [UIView notrace]

@@ -150,6 +150,7 @@ static NSString *expect;
 #if 0
     // For use with the "XcodeColors" plugin.
     // https://github.com/robbiehanson/XcodeColors
+    [Xtrace useColor:XTRACE_GREEN"\033[bg100,100,100;" forSelector:@selector(initialize)];
     [Xtrace useColor:XTRACE_RED forClass:[UITableViewCell class]];
     [Xtrace useColor:"\033[fg200,0,200;" forClass:[UIScreen class]];
     [Xtrace useColor:"\033[fg0,200,0;" forClass:[UIWindow class]];
