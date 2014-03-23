@@ -6,7 +6,19 @@ Xtrace is a header Xtrace.h and a C++ implementation file Xtrace.mm that allows
 you to intercept all method calls to instances of a class or a particular instance
 giving you output such as this:
 
-![Icon](http://injectionforxcode.johnholdsworth.com/xtracec.png?flush=1)
+	   [<UILabel 0x8d4f170> setCenter:{240, 160}] v16@0:4{CGPoint=ff}8
+		[<UILabel 0x8d4f170> actionForLayer:<CALayer 0x8d69410> forKey:<__NSCFString 0x8a535e0>] @16@0:4@8@12
+		 [<UILabel 0x8d4f170> _shouldAnimatePropertyWithKey:<__NSCFString 0x8a535e0>] c12@0:4@8
+		 -> 1 (_shouldAnimatePropertyWithKey:)
+		-> <NSNull 0x194d068> (actionForLayer:forKey:)
+	  [<UILabel 0x8d4f170> window] @8@0:4
+	  -> <UIWindow 0x8a69920> (window)
+	  [<UILabel 0x8d4f170> _isAncestorOfFirstResponder] c8@0:4
+	  -> 0 (_isAncestorOfFirstResponder)
+	 [<UILabel 0x8d4f170> layoutSublayersOfLayer:<CALayer 0x8d69410>] v12@0:4@8
+	  [<UILabel 0x8d4f170> _viewControllerToNotifyOnLayoutSubviews] @8@0:4
+	   [<UILabel 0x8d4f170> _viewDelegate] @8@0:4
+	   -> <nil 0x0> (_viewDelegate)
 
 To use, add Xtrace.{h,mm} to your project and add an import of Xtrace.h to your
 project's ".pch" file so you can access it's methods from anywhere in your project.
@@ -25,10 +37,7 @@ There is a simple category based shortcut interface to start tracing:
 If you have the [XcodeColors](https://github.com/johnno1962/XcodeColors) plugin
 installed you can now color traces by class or group of classes:
 
-    [Xtrace useColor:"\033[fg255,0,0;" forClass:[UITableView class]];
-    
-    // or to color all subsequent traces:
-    [Xtrace useColor:"\033[fg0,255,0;"]; // "fg" or "bg" then RRR,GGG,BBB;
+![Icon](http://injectionforxcode.johnholdsworth.com/xtracec.png?flush=2)
 
 As an alternative to building Xtrace into your project, Xtrace is now included
 in the "code injection" plugin from [injectionforxcode.com](http://injectionforxcode.com).
@@ -52,9 +61,9 @@ Once you have injected, all xtrace methods are available for you to use in lldb.
 
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
-32 bit configurations of OS X and iOS applications. The starting point is the
-XRAppDelegate.m class. The XRDetailViewController.m then switches to instance viewing
-of a specific UILabel when the detail view loads.
+configurations of OS X and iOS applications. The starting point is the XRAppDelegate.m class. 
+The XRDetailViewController.m then switches to instance viewing of a specific UILabel when
+the detail view loads.
 
 Display of method arguments is now on by default, but if you have problems:
 
@@ -135,23 +144,6 @@ Reliability is now quite good considering for 32 bit builds. I've had to introdu
 a method exclusion blacklist of a few methods causing problems. On 64 bits 
 you can expect some stack frame complications for methods with "struct" argument 
 types - in particular for arguments to callbacks to the delegate.
-
-### A few example combos:
-
-    // trace two instances
-    [UIView notrace];
-    [label trace];
-    [view trace];
-
-    // stop tracing them
-    [view notrace];
-    [label notrace];
-    
-    #ifdef __LP64__ // these methods cause problems
-        [Xtrace excludeMethods:@"^(hit|indexPath|set)"];
-    #endif
-        [UITableView xtrace];
-        [Xtrace excludeMethods:nil];
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 
