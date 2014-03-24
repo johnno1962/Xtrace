@@ -35,7 +35,7 @@ There is a simple category based shortcut interface to start tracing:
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
 
 If you have the [XcodeColors](https://github.com/johnno1962/XcodeColors) plugin
-installed you can now color traces by class or group of classes:
+installed you can now color traces by selector, class or group of classes:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtracec.png?flush=2)
 
@@ -65,6 +65,10 @@ configurations of OS X and iOS applications. The starting point is the XRAppDele
 The XRDetailViewController.m then switches to instance viewing of a specific UILabel when
 the detail view loads.
 
+You can display the symbol calling the method on entry by using:
+
+	[Xtrace showCaller:YES];
+	
 Display of method arguments is now on by default, but if you have problems:
 
 	[Xtrace showArguments:NO];

@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#73 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#75 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -62,7 +62,7 @@
 
 @implementation Xtrace
 
-static BOOL includeProperties, hideReturns, showArguments = YES, describeValues, logToDelegate;
+static BOOL includeProperties, showCaller, showReturns = YES, showArguments = YES, describeValues, logToDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
@@ -70,8 +70,12 @@ static id delegate;
     logToDelegate = [delegate respondsToSelector:@selector(xtraceLog:)];
 }
 
-+ (void)hideReturns:(BOOL)hide {
-    hideReturns = hide;
++ (void)showCaller:(BOOL)show {
+    showCaller = show;
+}
+
++ (void)showReturns:(BOOL)hide {
+    showReturns = hide;
 }
 
 + (void)includeProperties:(BOOL)include {
@@ -270,9 +274,18 @@ static const char *noColor = "", *traceColor = noColor;
 #import <dlfcn.h>
 
 + (const char *)callerFor:(Class)aClass sel:(SEL)sel {
-    static Dl_info info;
-    dladdr(originals[aClass][sel].caller, &info);
-    return info.dli_sname;
+    void *caller = originals[aClass][sel].caller;
+    static std::map<void *,const char *> callers;
+
+    if ( callers.find(caller) == callers.end() ) {
+        Dl_info info;
+        if ( dladdr(caller, &info) )
+            callers[caller] = strdup(info.dli_sname);
+        else
+            callers[caller] = NULL;
+    }
+
+    return callers[caller];
 }
 
 // delegate implements as instance method
@@ -289,10 +302,9 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
         case 'V': case 'v':
             return NO;
 
-        // warnings here are necessary evil
-        // but how does one suppress them??
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wall"
+#pragma clang diagnostic ignored "-Wvarargs"
+        // warnings here are necessary evil
         APPEND_TYPE( 'B', @"%d", bool )
         APPEND_TYPE( 'c', @"%d", char )
         APPEND_TYPE( 'C', @"%d", unsigned char )
@@ -383,10 +395,10 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         aClass = class_getSuperclass( aClass );
 
     struct _xtrace_info &orig = originals[aClass][sel];
+    orig.caller = __builtin_return_address(1);
 
     if ( !aClass ) {
-        NSLog( @"Xtrace: could not find original implementation for [%s %s]",
-              className, sel_getName(info->sel) );
+        NSLog( @"Xtrace: could not find original implementation for [%s %s]", className, sel_getName(sel) );
         orig.original = (VIMP)nullImpl;
     }
 
@@ -401,6 +413,9 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         orig.color = NULL;
 
     if ( orig.color ) {
+        const char *symbol;
+        if ( showCaller && indent == 0 && (symbol = [Xtrace callerFor:aClass sel:sel]) )
+                [logToDelegate ? delegate : [Xtrace class] xtraceLog:[NSString stringWithFormat:@"From: %s", symbol]];
 
         NSMutableString *args = [NSMutableString string];
         if ( orig.color[0] )
@@ -442,7 +457,7 @@ static void returning( struct _xtrace_info *orig, ... ) {
     va_list argp; va_start(argp, orig);
     indent && indent--;
 
-    if ( orig->color && !hideReturns ) {
+    if ( orig->color && showReturns ) {
         NSMutableString *val = [NSMutableString string];
         [val appendFormat:@"%s%*s-> ", orig->color, indent, ""];
         if ( formatValue(orig->type, NULL, &argp, val) ) {
@@ -471,7 +486,6 @@ template <typename _type, int _depth>
 static void xtrace( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_depth info = { obj, sel, _depth };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
-    orig.caller = __builtin_return_address(0);
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;
@@ -494,7 +508,6 @@ template <typename _type, int _depth>
 static _type XTRACE_RETAINED xtrace_t( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_depth info = { obj, sel, _depth };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
-    orig.caller = __builtin_return_address(0);
 
     if ( orig.before && !orig.callingBack ) {
         orig.callingBack = YES;

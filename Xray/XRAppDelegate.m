@@ -65,9 +65,10 @@ static NSString *expect;
 
 + (void)xtraceLog:(NSString *)trace {
     printf( "| %s\n", [trace UTF8String] );
-    if ( expect )
+    if ( expect && ![trace hasPrefix:@"From:"] ) {
         assert( [trace rangeOfString:expect].location != NSNotFound );
-    expect = nil;
+        expect = nil;
+    }
 }
 
 @end
@@ -82,9 +83,10 @@ static NSString *expect;
     // the various options..
     //[Xtrace methodFilter:"^set"];
     //[Xtrace describeValues:YES];
-    //[Xtrace hideReturns:YES];
+    //[Xtrace showArguments:NO];
+    //[Xtrace showReturns:NO];
 
-    [Xtrace showArguments:YES];
+	[Xtrace showCaller:YES];
     [UINavigationController xtrace];
 
     // delegate must not have been traced.
@@ -148,19 +150,21 @@ static NSString *expect;
     assert([self rect:a shift:1].origin.x==a.origin.x+1);
 
 #if 0
-    // For use with the "XcodeColors" plugin.
+    // For use with the "XcodeColors" Xcode plugin.
     // https://github.com/robbiehanson/XcodeColors
-    [Xtrace useColor:XTRACE_GREEN"\033[bg100,100,100;" forSelector:@selector(initialize)];
+    // Use the fork with a minor optimisation at:
+    // https://github.com/johnno1962/XcodeColors
+    [Xtrace useColor:XTRACE_GREEN XTRACE_BG"100,100,100;" forSelector:@selector(initialize)];
     [Xtrace useColor:XTRACE_RED forClass:[UITableViewCell class]];
-    [Xtrace useColor:"\033[fg200,0,200;" forClass:[UIScreen class]];
-    [Xtrace useColor:"\033[fg0,200,0;" forClass:[UIWindow class]];
-    [Xtrace useColor:"\033[fg0,200,100;" forClass:[UILabel class]];
+    [Xtrace useColor:XTRACE_FG"200,0,200;" forClass:[UIScreen class]];
+    [Xtrace useColor:XTRACE_FG"0,200,0;" forClass:[UIWindow class]];
+    [Xtrace useColor:XTRACE_FG"0,200,100;" forClass:[UILabel class]];
 
-    [Xtrace useColor:"\033[fg100,100,0;"];
+    [Xtrace useColor:XTRACE_FG"100,100,0;"];
 #endif
 
     // go on then, let's just trace (almost) the lot...
-    [Xtrace traceClassPattern:@"^UI" excluding:@"UIKeyboardCandidateUtilities"];
+    [Xtrace traceClassPattern:@"^(UI|_UI|NSIS)" excluding:@"UIKeyboardCandidateUtilities"];
 
     return YES;
 }
