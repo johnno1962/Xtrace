@@ -65,10 +65,6 @@ configurations of OS X and iOS applications. The starting point is the XRAppDele
 The XRDetailViewController.m then switches to instance viewing of a specific UILabel when
 the detail view loads.
 
-You can display the symbol calling the method on entry by using:
-
-	[Xtrace showCaller:YES];
-	
 Display of method arguments is now on by default, but if you have problems:
 
 	[Xtrace showArguments:NO];
