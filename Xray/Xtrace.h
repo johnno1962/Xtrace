@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#29 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#30 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -135,6 +135,9 @@ struct _xtrace_info {
 
 // show caller on entry
 + (void)showCaller:(BOOL)show;
+
+// show class implementing
++ (void)showActual:(BOOL)show;
 
 // show log of return values
 + (void)showReturns:(BOOL)show;

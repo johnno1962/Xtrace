@@ -123,15 +123,15 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
 #ifdef __LP64__
-    expect = @"> long:1L] q";
+    expect = @"> long:1L]";
 #else
-    expect = @"> long:1L] l";
+    expect = @"> long:1L]";
 #endif
     assert([self long:1L]==1);
 #ifdef __LP64__
-    expect = @"> longLong:1L] q";
+    expect = @"> longLong:1L]";
 #else
-    expect = @"> longLong:1LL] q";
+    expect = @"> longLong:1LL]";
 #endif
     assert([self longLong:1LL]==1);
 

@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#75 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#76 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -62,7 +62,7 @@
 
 @implementation Xtrace
 
-static BOOL includeProperties, showCaller, showReturns = YES, showArguments = YES, describeValues, logToDelegate;
+static BOOL includeProperties, showCaller, showActual = YES, showReturns = YES, showArguments = YES, describeValues, logToDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
@@ -72,6 +72,10 @@ static id delegate;
 
 + (void)showCaller:(BOOL)show {
     showCaller = show;
+}
+
++ (void)showActual:(BOOL)show {
+    showActual = show;
 }
 
 + (void)showReturns:(BOOL)hide {
@@ -402,8 +406,10 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         orig.original = (VIMP)nullImpl;
     }
 
-    // add custom filtering of logging here..
+    Class implementingClass = aClass;
     aClass = object_getClass( info->obj );
+
+    // add custom filtering of logging here..
     if ( !describing && orig.mtype &&
         (!tracingInstances ? tracedClasses[aClass] != nil :
          tracedInstances.find(info->obj) != tracedInstances.end()) )
@@ -421,8 +427,14 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         if ( orig.color[0] )
             [args appendFormat:@"%s", orig.color];
 
-        [args appendFormat:@"%*s%s[<%s %p>",
-         indent++, "", orig.mtype, className, info->obj];
+        if ( orig.mtype[0] == '+' )
+            [args appendFormat:@"%*s%s[%s",
+             indent++, "", orig.mtype, className];
+        else
+            [args appendFormat:@"%*s%s[<%s %p>",
+             indent++, "", orig.mtype, className, info->obj];
+        if ( showActual && implementingClass != aClass )
+            [args appendFormat:@"/%s", class_getName(implementingClass)];
 
         if ( !showArguments )
             [args appendFormat:@" %s", orig.name];
@@ -440,8 +452,11 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
             }
         }
 
-        [args appendFormat:@"] %.100s %p", orig.type, orig.original];
-        if ( orig.color[0] ) [args appendString:@"\033[;"];
+        [args appendString:@"]"];
+        if ( 0 )
+            [args appendFormat:@" %.100s %p", orig.type, orig.original];
+        if ( orig.color[0] )
+            [args appendString:@"\033[;"];
         [logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
     }
 
