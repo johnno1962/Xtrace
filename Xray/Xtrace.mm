@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#76 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#79 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -62,7 +62,8 @@
 
 @implementation Xtrace
 
-static BOOL includeProperties, showCaller, showActual = YES, showReturns = YES, showArguments = YES, describeValues, logToDelegate;
+static BOOL showCaller, showActual = YES, showReturns = YES, showArguments = YES,
+    showSignature = NO, includeProperties = NO, describeValues = NO, logToDelegate;
 static id delegate;
 
 + (void)setDelegate:aDelegate {
@@ -100,7 +101,6 @@ static std::map<XTRACE_UNSAFE Class,BOOL> swizzledClasses, excludedClasses;
 static std::map<XTRACE_UNSAFE id,BOOL> tracedInstances;
 static std::map<SEL,const char *> selectorColors;
 static BOOL tracingInstances;
-static int indent;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
@@ -277,19 +277,20 @@ static const char *noColor = "", *traceColor = noColor;
 
 #import <dlfcn.h>
 
-+ (const char *)callerFor:(Class)aClass sel:(SEL)sel {
-    void *caller = originals[aClass][sel].caller;
++ (const char *)callerFor:(void *)caller {
     static std::map<void *,const char *> callers;
 
     if ( callers.find(caller) == callers.end() ) {
         Dl_info info;
         if ( dladdr(caller, &info) )
             callers[caller] = strdup(info.dli_sname);
-        else
-            callers[caller] = NULL;
     }
 
     return callers[caller];
+}
+
++ (const char *)callerFor:(Class)aClass sel:(SEL)sel {
+    return [self callerFor:originals[aClass][sel].caller];
 }
 
 // delegate implements as instance method
@@ -388,6 +389,8 @@ static id nullImpl( XTRACE_UNSAFE __unused id obj, __unused SEL sel, ... ) {
     return nil;
 }
 
+static int indent; // could/should be thread var but causes deadlocks
+
 // find struct _original implmentation for message and log call
 static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, ... ) {
     va_list argp; va_start(argp, sel);
@@ -420,8 +423,8 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 
     if ( orig.color ) {
         const char *symbol;
-        if ( showCaller && indent == 0 && (symbol = [Xtrace callerFor:aClass sel:sel]) )
-                [logToDelegate ? delegate : [Xtrace class] xtraceLog:[NSString stringWithFormat:@"From: %s", symbol]];
+        if ( showCaller && indent == 0 && (symbol = [Xtrace callerFor:orig.caller]) )
+                [logToDelegate ? delegate : [Xtrace class] xtraceLog:[@"From: " stringByAppendingString:[NSString stringWithUTF8String:symbol]]];
 
         NSMutableString *args = [NSMutableString string];
         if ( orig.color[0] )
@@ -453,7 +456,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         }
 
         [args appendString:@"]"];
-        if ( 0 )
+        if ( showSignature )
             [args appendFormat:@" %.100s %p", orig.type, orig.original];
         if ( orig.color[0] )
             [args appendString:@"\033[;"];
@@ -470,7 +473,8 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 // log returning value
 static void returning( struct _xtrace_info *orig, ... ) {
     va_list argp; va_start(argp, orig);
-    indent && indent--;
+    if ( indent )
+        indent--;
 
     if ( orig->color && showReturns ) {
         NSMutableString *val = [NSMutableString string];
