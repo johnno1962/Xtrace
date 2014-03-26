@@ -61,9 +61,9 @@ Once you have injected, all xtrace methods are available for you to use in lldb.
 
 The example project, originally called "Xray" will show you how to use the Xtrace module
 to get up and running. Your milage will vary though the source should build and work for 
-configurations of OS X and iOS applications. The starting point is the XRAppDelegate.m class. 
-The XRDetailViewController.m then switches to instance viewing of a specific UILabel when
-the detail view loads.
+32 bit configurations on an iOS device or 64 bit OS X applications or the simulator. 
+The starting point is the XRAppDelegate.m class. The XRDetailViewController.m then 
+switches to instance viewing of a specific UILabel when the detail view loads.
 
 Display of method arguments is now on by default, but if you have problems:
 
@@ -159,9 +159,10 @@ is a little contrived:
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=2)
 
 Reliability is now quite good for 32 bit builds considering.. I've had to introduce
-a method exclusion blacklist of a few methods causing problems. On 64 bits 
+a method exclusion blacklist of a few methods causing problems. On 64 bit OS X
 you can expect some stack frame complications for methods with "struct" argument 
 or return types - in particular for arguments to callbacks to the delegate.
+Xtrace does not currently work on the ARM64 abi - rebuild for 32 bits.
 
 The ordering of calls to the api is: 1) Any class exclusions, 2) any method selector filter then
 3) Class tracing or instance tracing and 4) any callbacks. That's about it. If you encounter 

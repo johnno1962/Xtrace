@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#81 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#84 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -497,6 +497,10 @@ static void returning( struct _xtrace_info *orig, ... ) {
     }
 }
 
+#ifdef __arm64__
+#error Xtrace will not work on a native ARM64 build. Rebuild for 32 bits only.
+#endif
+
 #define ARG_SIZE (sizeof(id) + sizeof(SEL) + sizeof(void *)*9) // approximate to say the least..
 #ifndef __LP64__
 #define ARG_DEFS void *a0, void *a1, void *a2, void *a3, void *a4, void *a5, void *a6, void *a7, void *a8, void *a9
@@ -710,7 +714,8 @@ switch ( depth%IMPL_COUNT ) { \
     return -1;
 }
 
-#else // alternate "NSGetSizeAndAlignment()" version
+#else
+#if 1 // alternate "NSGetSizeAndAlignment()" version
 
 + (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
     NSUInteger size, align, offset = 0;
@@ -738,6 +743,19 @@ switch ( depth%IMPL_COUNT ) { \
     return -1;
 }
 
+#else // Extract types using NSMethodSignature - gives unsuppported type error
+
++ (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
+    NSMethodSignature *info = [NSMethodSignature signatureWithObjCTypes:type];
+    int acount = (int)[info numberOfArguments];
+
+    for ( int i=2 ; i<acount ; i++ )
+        args[i-2].type = [info getArgumentTypeAtIndex:i];
+
+    return acount-2;
+}
+
+#endif
 #endif
 
 + (void)dumpClass:(Class)aClass {
