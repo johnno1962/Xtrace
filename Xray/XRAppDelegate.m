@@ -122,6 +122,15 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
+    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:(BIMP)^void ( UILabel *label ){
+        NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
+        return;
+    }];
+    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:(BIMP)^void ( UILabel *label ){
+        NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
+        return;
+    }];
+
 #ifdef __LP64__
     expect = @"> long:1L]";
 #else

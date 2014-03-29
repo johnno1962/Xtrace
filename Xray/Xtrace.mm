@@ -151,10 +151,19 @@ static BOOL tracingInstances;
         NSLog( @"Xtrace: ** Could not setup after callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
++ (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:(BIMP)callback {
+    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
+              depth:[self depth:aClass]]->beforeBlock = (BIMP)CFRetain( (CFTypeRef)callback );
+}
+
++ (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:(BIMP)callback {
+    [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
+              depth:[self depth:aClass]]->afterBlock = (BIMP)CFRetain( (CFTypeRef)callback );
+}
+
 + (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
-    int depth = [self depth:aClass];
-    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL depth:depth] ?
-        (VIMP)[delegate methodForSelector:callback] : NULL;
+    return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
+                     depth:[self depth:aClass]] ? (VIMP)[delegate methodForSelector:callback] : NULL;
 }
 
 + (int)depth:(Class)aClass {
@@ -519,18 +528,32 @@ static void xtrace( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS ) {
     struct _xtrace_depth info = { obj, sel, _depth };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
-    if ( orig.before && !orig.callingBack ) {
-        orig.callingBack = YES;
-        orig.before( delegate, sel, obj, ARG_COPY );
-        orig.callingBack = NO;
+    if ( !orig.callingBack ) {
+        if ( orig.before ) {
+            orig.callingBack = YES;
+            orig.before( delegate, sel, obj, ARG_COPY );
+            orig.callingBack = NO;
+        }
+        else if ( orig.beforeBlock ) {
+            orig.callingBack = YES;
+            orig.beforeBlock( obj, sel, ARG_COPY );
+            orig.callingBack = NO;
+        }
     }
 
     orig.original( obj, sel, ARG_COPY );
 
-    if ( orig.after && !orig.callingBack ) {
-        orig.callingBack = YES;
-        orig.after( delegate, sel, obj, ARG_COPY );
-        orig.callingBack = NO;
+    if ( !orig.callingBack ) {
+        if ( orig.after ) {
+            orig.callingBack = YES;
+            orig.after( delegate, sel, obj, ARG_COPY );
+            orig.callingBack = NO;
+        }
+        else if ( orig.afterBlock ) {
+            orig.callingBack = YES;
+            orig.afterBlock( obj, sel, ARG_COPY );
+            orig.callingBack = NO;
+        }
     }
 
     returning( &orig );
@@ -541,28 +564,44 @@ static _type XTRACE_RETAINED xtrace_t( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS )
     struct _xtrace_depth info = { obj, sel, _depth };
     struct _xtrace_info &orig = findOriginal( &info, sel, ARG_COPY );
 
-    if ( orig.before && !orig.callingBack ) {
-        orig.callingBack = YES;
-        orig.before( delegate, sel, obj, ARG_COPY );
-        orig.callingBack = NO;
+    if ( !orig.callingBack ) {
+        if ( orig.before ) {
+            orig.callingBack = YES;
+            orig.before( delegate, sel, obj, ARG_COPY );
+            orig.callingBack = NO;
+        }
+        else if ( orig.beforeBlock ) {
+            orig.callingBack = YES;
+            orig.beforeBlock( obj, sel, ARG_COPY );
+            orig.callingBack = NO;
+        }
     }
 
     _type (*impl)( XTRACE_UNSAFE id obj, SEL sel, ... ) =
         (_type (*)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.original;
     _type out = impl( obj, sel, ARG_COPY );
 
-    if ( orig.after && !orig.callingBack ) {
-        orig.callingBack = YES;
-        impl = (_type (*)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.after;
-        out = impl( delegate, sel, out, obj, ARG_COPY );
-        orig.callingBack = NO;
+    if ( !orig.callingBack ) {
+        if ( orig.after ) {
+            orig.callingBack = YES;
+            impl = (_type (*)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.after;
+            out = impl( delegate, sel, out, obj, ARG_COPY );
+            orig.callingBack = NO;
+        }
+        else if ( orig.afterBlock ) {
+            orig.callingBack = YES;
+            _type (^bimpl)( XTRACE_UNSAFE id obj, SEL sel, ... ) =
+                (_type (^)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.afterBlock;
+            out = bimpl( obj, sel, out, ARG_COPY );
+            orig.callingBack = NO;
+        }
     }
 
     returning( &orig, out );
     return out;
 }
 
-+ (BOOL)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int)depth {
++ (struct _xtrace_info *)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int)depth {
     SEL sel = method_getName(method);
     const char *name = sel_getName(sel);
     const char *className = class_getName(aClass);
@@ -661,10 +700,10 @@ switch ( depth%IMPL_COUNT ) { \
             //NSLog( @"%d %s%s %s %s", depth, mtype, className, name, type );
         }
 
-        return YES;
+        return &orig;
     }
 
-    return NO;
+    return NULL;
 }
 
 // break up selector by argument

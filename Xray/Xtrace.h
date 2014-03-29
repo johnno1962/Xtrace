@@ -77,6 +77,7 @@
 #define XTRACE_ARGS_SUPPORTED 10
 
 typedef void (*VIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
+typedef void (^BIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
 
 struct _xtrace_arg {
     const char *name, *type;
@@ -92,6 +93,7 @@ struct _xtrace_info {
     XTRACE_UNSAFE id lastObj;
     VIMP before, original, after;
     const char *name, *type, *mtype;
+    XTRACE_UNSAFE BIMP beforeBlock, afterBlock;
     struct _xtrace_arg args[XTRACE_ARGS_SUPPORTED+1];
 
     struct _stats {
@@ -191,6 +193,9 @@ struct _xtrace_info {
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass after:(SEL)sel callback:(SEL)callback;
+
++ (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:(BIMP)callback;
++ (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:(BIMP)callback;
 
 // get parsed argument info and recorded stats
 + (struct _xtrace_info *)infoFor:(Class)aClass sel:(SEL)sel;
