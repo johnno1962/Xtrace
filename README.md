@@ -124,14 +124,6 @@ something like a variation on "aspect oriented programming".
     // non-void method signature in class "AClass"
     - (NSString *)appendString:(NSString *)string;
 
-    // code to inject "before" method callback
-    [Xtrace forClass:[AClass class] before:@selector(appendString:) callback:@selector(object:appendString:)];
-
-    // "before" method callback implementation in delegate as per void
-    - (void)object:(id)receiver appendString:(NSString *)string {
-        ...
-    }
-
     // code to inject "after" method callback
     [Xtrace forClass:[AClass class] after:@selector(appendString:) callback:@selector(out:object:appendString:)];
 
@@ -154,12 +146,12 @@ is a little contrived:
         return text;
     }
 
-There is also a block based api for callbacks:
+There is also a block based api for callbacks which can be called at any time:
 
-    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
     }];
-    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
     }];
 

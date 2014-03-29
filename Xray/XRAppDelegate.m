@@ -122,10 +122,10 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
-    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
     }];
-    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
     }];
 
@@ -171,7 +171,7 @@ static NSString *expect;
 #endif
 
     // go on then, let's just trace (almost) the lot...
-    [Xtrace traceClassPattern:@"^(UI|_UI|NSIS)" excluding:@"UIKeyboardCandidateUtilities"];
+    [Xtrace traceClassPattern:@"^(_?UI|NSIS)" excluding:@"UIKeyboardCandidateUtilities"];
 
     return YES;
 }
