@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#86 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#91 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -42,6 +42,14 @@
     [Xtrace dumpClass:self];
 }
 
++ (void)beforeSelector:(SEL)sel callBlock:callback {
+    [Xtrace forClass:self before:sel callbackBlock:callback];
+}
+
++ (void)afterSelector:(SEL)sel callBlock:callback {
+    [Xtrace forClass:self after:sel callbackBlock:callback];
+}
+
 + (void)notrace {
     [Xtrace dontTrace:self];
 }
@@ -69,7 +77,12 @@ static id delegate;
 
 + (void)setDelegate:aDelegate {
     delegate = aDelegate;
-    params.logToDelegate = [delegate respondsToSelector:@selector(xtraceLog:)];
+    params.logToDelegate = [delegate respondsToSelector:@selector(xtrace:forInstance:)];
+}
+
+// callback delegate can implement as instance method
++ (void)xtrace:(NSString *)trace forInstance:(void *)obj {
+    printf( "| %s\n", [trace UTF8String] );
 }
 
 + (void)showCaller:(BOOL)show {
@@ -153,17 +166,17 @@ static BOOL tracingInstances;
 
 + (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
-              depth:[self depth:aClass]]->beforeBlock = (BIMP)CFRetain( (CFTypeRef)callback );
+              depth:[self depth:aClass]]->beforeBlock = (XTRACE_BIMP)CFRetain( (CFTypeRef)callback );
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
-              depth:[self depth:aClass]]->afterBlock = (BIMP)CFRetain( (CFTypeRef)callback );
+              depth:[self depth:aClass]]->afterBlock = (XTRACE_BIMP)CFRetain( (CFTypeRef)callback );
 }
 
-+ (VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
++ (XTRACE_VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
     return [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
-                     depth:[self depth:aClass]] ? (VIMP)[delegate methodForSelector:callback] : NULL;
+                     depth:[self depth:aClass]] ? (XTRACE_VIMP)[delegate methodForSelector:callback] : NULL;
 }
 
 + (int)depth:(Class)aClass {
@@ -308,12 +321,7 @@ static const char *noColor = "", *traceColor = noColor;
     return [self callerFor:originals[aClass][sel].caller];
 }
 
-// delegate implements as instance method
-+ (void)xtraceLog:(NSString *)trace {
-    printf( "| %s\n", [trace UTF8String] );
-}
-
-// should really be per-thread but causes deadlocks
+// should really be per-thread but can deadlock
 static struct { int indent;  BOOL describing; } state;
 
 #define APPEND_TYPE( _enc, _fmt, _type ) case _enc: [args appendFormat:_fmt, va_arg(*argp,_type)]; return YES;
@@ -416,11 +424,12 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         aClass = class_getSuperclass( aClass );
 
     struct _xtrace_info &orig = originals[aClass][sel];
+    orig.lastObj = XTRACE_BRIDGE(void*)info->obj;
     orig.caller = __builtin_return_address(1);
 
     if ( !aClass ) {
         NSLog( @"Xtrace: could not find original implementation for [%s %s]", className, sel_getName(sel) );
-        orig.original = (VIMP)nullImpl;
+        orig.original = (XTRACE_VIMP)nullImpl;
     }
 
     Class implementingClass = aClass;
@@ -442,7 +451,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         if ( params.showCaller && state.indent == 0 &&
             (symbol = [Xtrace callerFor:orig.caller]) && symbol[0] != '<' ) {
             [args appendFormat:@"From: %s", symbol];
-            [params.logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
+            [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj];
             [args setString:@""];
         }
 
@@ -482,13 +491,11 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
             [args appendFormat:@" %.100s %p", orig.type, orig.original];
         if ( orig.color[0] )
             [args appendString:@"\033[;"];
-        [params.logToDelegate ? delegate : [Xtrace class] xtraceLog:args];
+        [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj];
     }
 
-    orig.stats.callCount++;
     orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
-    orig.lastObj = info->obj;
-
+    orig.stats.callCount++;
     return orig;
 }
 
@@ -506,7 +513,7 @@ static void returning( struct _xtrace_info *orig, ... ) {
         if ( formatValue(orig->type, NULL, &argp, val) ) {
             [val appendFormat:@" (%s)", orig->name];
             if ( orig->color[0] ) [val appendString:@"\033[;"];
-            [params.logToDelegate ? delegate : [Xtrace class] xtraceLog:val];
+            [params.logToDelegate ? delegate : [Xtrace class] xtrace:val forInstance:orig->lastObj];
         }
     }
 }
@@ -534,7 +541,7 @@ static void xtrace( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS ) {
             orig.before( delegate, sel, obj, ARG_COPY );
             orig.callingBack = NO;
         }
-        else if ( orig.beforeBlock ) {
+        if ( orig.beforeBlock ) {
             orig.callingBack = YES;
             orig.beforeBlock( obj, sel, ARG_COPY );
             orig.callingBack = NO;
@@ -549,7 +556,7 @@ static void xtrace( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS ) {
             orig.after( delegate, sel, obj, ARG_COPY );
             orig.callingBack = NO;
         }
-        else if ( orig.afterBlock ) {
+        if ( orig.afterBlock ) {
             orig.callingBack = YES;
             orig.afterBlock( obj, sel, ARG_COPY );
             orig.callingBack = NO;
@@ -570,29 +577,29 @@ static _type XTRACE_RETAINED xtrace_t( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS )
             orig.before( delegate, sel, obj, ARG_COPY );
             orig.callingBack = NO;
         }
-        else if ( orig.beforeBlock ) {
+        if ( orig.beforeBlock ) {
             orig.callingBack = YES;
             orig.beforeBlock( obj, sel, ARG_COPY );
             orig.callingBack = NO;
         }
     }
 
-    _type (*impl)( XTRACE_UNSAFE id obj, SEL sel, ... ) =
-        (_type (*)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.original;
+    typedef _type (*TIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
+    TIMP impl = (TIMP)orig.original;
     _type out = impl( obj, sel, ARG_COPY );
 
     if ( !orig.callingBack ) {
         if ( orig.after ) {
             orig.callingBack = YES;
-            impl = (_type (*)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.after;
+            impl = (TIMP)orig.after;
             out = impl( delegate, sel, out, obj, ARG_COPY );
             orig.callingBack = NO;
         }
-        else if ( orig.afterBlock ) {
+        if ( orig.afterBlock ) {
+            typedef _type (^BTIMP)( XTRACE_UNSAFE id obj, SEL sel, _type out, ... );
             orig.callingBack = YES;
-            _type (^bimpl)( XTRACE_UNSAFE id obj, SEL sel, ... ) =
-                (_type (^)( XTRACE_UNSAFE id obj, SEL sel, ... ))orig.afterBlock;
-            out = bimpl( obj, sel, out, ARG_COPY );
+            BTIMP timpl = (BTIMP)orig.afterBlock;
+            out = timpl( obj, sel, out, ARG_COPY );
             orig.callingBack = NO;
         }
     }
@@ -695,7 +702,7 @@ switch ( depth%IMPL_COUNT ) { \
 
         IMP impl = method_getImplementation(method);
         if ( impl != newImpl ) {
-            orig.original = (VIMP)impl;
+            orig.original = (XTRACE_VIMP)impl;
             method_setImplementation(method,newImpl);
             //NSLog( @"%d %s%s %s %s", depth, mtype, className, name, type );
         }

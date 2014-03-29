@@ -63,7 +63,7 @@
 
 static NSString *expect;
 
-+ (void)xtraceLog:(NSString *)trace {
++ (void)xtrace:(NSString *)trace forInstance:(void *)obj {
     printf( "| %s\n", [trace UTF8String] );
     if ( expect && ![trace hasPrefix:@"From:"] ) {
         assert( [trace rangeOfString:expect].location != NSNotFound );
@@ -122,10 +122,10 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
-    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
+    [[UIView class] beforeSelector:@selector(sizeToFit) callBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
     }];
-    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^( UILabel *label ) {
+    [[UIView class] afterSelector:@selector(sizeToFit) callBlock:^( UILabel *label ) {
         NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
     }];
 

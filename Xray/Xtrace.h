@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#35 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.h#36 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -59,7 +59,7 @@
 #define XTRACE_RETAINED
 #endif
 
-#define XTRACE_EXCLUSIONS "^(initWithCoder:|"\
+#define XTRACE_EXCLUSIONS "^(initWithCoder:|_UIAppearance_|"\
     "_(initializeFor|performUpdatesForPossibleChangesOf)Idiom:|"\
     "timeIntervalSinceReferenceDate)|(WithObjects(AndKeys)?|Format):$"
 
@@ -76,8 +76,8 @@
 // internal information
 #define XTRACE_ARGS_SUPPORTED 10
 
-typedef void (*VIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
-typedef void (^BIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
+typedef void (*XTRACE_VIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
+typedef void (^XTRACE_BIMP)( XTRACE_UNSAFE id obj, SEL sel, ... );
 
 struct _xtrace_arg {
     const char *name, *type;
@@ -88,12 +88,14 @@ struct _xtrace_arg {
 struct _xtrace_info {
     int depth;
     void *caller;
-    Method method;
+    void *lastObj;
     const char *color;
-    XTRACE_UNSAFE id lastObj;
-    VIMP before, original, after;
+
+    XTRACE_VIMP before, original, after;
+    XTRACE_UNSAFE XTRACE_BIMP beforeBlock, afterBlock;
+
+    Method method;
     const char *name, *type, *mtype;
-    XTRACE_UNSAFE BIMP beforeBlock, afterBlock;
     struct _xtrace_arg args[XTRACE_ARGS_SUPPORTED+1];
 
     struct _stats {
@@ -108,6 +110,12 @@ struct _xtrace_info {
 // dump class
 + (void)xdump;
 
+// intercept before method is called
++ (void)beforeSelector:(SEL)sel callBlock:callback;
+
+// after intercept block replaces return value
++ (void)afterSelector:(SEL)sel callBlock:callback;
+
 // avoid a class
 + (void)notrace;
 
@@ -117,7 +125,7 @@ struct _xtrace_info {
 // trace instance
 - (void)xtrace;
 
-// stop tacing "
+// stop tacing ""
 - (void)notrace;
 
 @end
@@ -185,10 +193,6 @@ struct _xtrace_info {
 // dump runtime class info
 + (void)dumpClass:(Class)aClass;
 
-// simple profiling interface
-+ (NSArray *)profile;
-+ (void)dumpProfile:(int)count dp:(int)decimalPlaces;
-
 // before, replacement and after callbacks to delegate
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback;
 + (void)forClass:(Class)aClass replace:(SEL)sel callback:(SEL)callback;
@@ -203,6 +207,10 @@ struct _xtrace_info {
 
 // name the caller of the specified method
 + (const char *)callerFor:(Class)aClass sel:(SEL)sel;
+
+// simple profiling interface
++ (NSArray *)profile;
++ (void)dumpProfile:(int)count dp:(int)decimalPlaces;
 
 @end
 #endif
