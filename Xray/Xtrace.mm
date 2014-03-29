@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#85 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#86 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -151,12 +151,12 @@ static BOOL tracingInstances;
         NSLog( @"Xtrace: ** Could not setup after callback for: [%s %s]", class_getName(aClass), sel_getName(sel) );
 }
 
-+ (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:(BIMP)callback {
++ (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
               depth:[self depth:aClass]]->beforeBlock = (BIMP)CFRetain( (CFTypeRef)callback );
 }
 
-+ (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:(BIMP)callback {
++ (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
               depth:[self depth:aClass]]->afterBlock = (BIMP)CFRetain( (CFTypeRef)callback );
 }

@@ -154,6 +154,15 @@ is a little contrived:
         return text;
     }
 
+There is also a block based api for callbacks:
+
+    [Xtrace forClass:[UIView class] before:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+        NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
+    }];
+    [Xtrace forClass:[UIView class] after:@selector(sizeToFit) callbackBlock:^void ( UILabel *label ) {
+        NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
+    }];
+
 ### What works:
 
 ![Icon](http://injectionforxcode.johnholdsworth.com/xtrace.png?flush=2)
