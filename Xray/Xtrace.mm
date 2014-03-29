@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#91 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#92 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -310,7 +310,7 @@ static const char *noColor = "", *traceColor = noColor;
 
     if ( callers.find(caller) == callers.end() ) {
         Dl_info info;
-        if ( dladdr(caller, &info) )
+        if ( dladdr(caller, &info) && info.dli_sname )
             callers[caller] = strdup(info.dli_sname);
     }
 
