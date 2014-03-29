@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#84 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#85 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -114,9 +114,14 @@ static BOOL tracingInstances;
 }
 
 + (void)traceClass:(Class)aClass levels:(int)levels {
+#ifdef __arm64__
+// make this into #warning to switch between the simulator and a device more easily
+#error Xtrace will not work on an ARM64 build. Rebuild for $(ARCHS_STANDARD_32_BIT).
+#else
     Class metaClass = object_getClass(aClass);
     [self traceClass:metaClass mtype:"+" levels:levels];
     [self traceClass:aClass mtype:"" levels:levels];
+#endif
 }
 
 + (void)traceInstance:(id)instance {
@@ -496,10 +501,6 @@ static void returning( struct _xtrace_info *orig, ... ) {
         }
     }
 }
-
-#ifdef __arm64__
-#error Xtrace will not work on a native ARM64 build. Rebuild for 32 bits only.
-#endif
 
 #define ARG_SIZE (sizeof(id) + sizeof(SEL) + sizeof(void *)*9) // approximate to say the least..
 #ifndef __LP64__
