@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#92 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#93 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -502,7 +502,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 // log returning value
 static void returning( struct _xtrace_info *orig, ... ) {
     va_list argp; va_start(argp, orig);
-    if ( state.indent )
+    if ( state.indent > 0 )
         state.indent--;
 
     orig->stats.elapsed += [NSDate timeIntervalSinceReferenceDate] - orig->stats.entered;
