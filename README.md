@@ -21,7 +21,7 @@ giving you output such as this:
 	   -> <nil 0x0> (_viewDelegate)
 
 To use, add Xtrace.{h,mm} to your project and add an import of Xtrace.h to your
-project's ".pch" file so you can access it's methods from anywhere in your project.
+project's ".pch" file so you can access its methods from anywhere in your project.
 There is a simple category based shortcut interface to start tracing:
 
 	[MyClass xtrace]; // to trace all calls to instances of a class
