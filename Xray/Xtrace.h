@@ -210,7 +210,7 @@ struct _xtrace_info {
 
 // simple profiling interface
 + (NSArray *)profile;
-+ (void)dumpProfile:(int)count dp:(int)decimalPlaces;
++ (void)dumpProfile:(unsigned int)count dp:(int)decimalPlaces;
 
 @end
 #endif

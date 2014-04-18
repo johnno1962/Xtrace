@@ -935,7 +935,7 @@ switch ( depth%IMPL_COUNT ) { \
     return profile;
 }
 
-+ (void)dumpProfile:(int)count dp:(int)decimalPlaces {
++ (void)dumpProfile:(unsigned int)count dp:(int)decimalPlaces {
     NSArray *profile = [self profile];
     for ( unsigned int i=0 ; i<count && i<[profile count] ; i++ ) {
         Xtrace *trace = [profile objectAtIndex:i];
