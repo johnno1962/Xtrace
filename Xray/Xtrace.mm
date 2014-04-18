@@ -472,7 +472,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
             [args appendFormat:@" %s", orig.name];
         else {
             const char *frame = (char *)(void *)&info+sizeof info;
-            void *valptr = &sel;
+            void *valptr = NULL;
 
             BOOL typesKnown = YES;
             for ( struct _xtrace_arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
@@ -935,7 +935,7 @@ switch ( depth%IMPL_COUNT ) { \
     return profile;
 }
 
-+ (void)dumpProfile:(int)count dp:(int)decimalPlaces {
++ (void)dumpProfile:(unsigned int)count dp:(int)decimalPlaces {
     NSArray *profile = [self profile];
     for ( unsigned int i=0 ; i<count && i<[profile count] ; i++ ) {
         Xtrace *trace = [profile objectAtIndex:i];
