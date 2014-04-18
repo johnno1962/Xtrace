@@ -472,7 +472,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
             [args appendFormat:@" %s", orig.name];
         else {
             const char *frame = (char *)(void *)&info+sizeof info;
-            void *valptr = &sel;
+            void *valptr = NULL;
 
             BOOL typesKnown = YES;
             for ( struct _xtrace_arg *aptr = orig.args ; *aptr->name ; aptr++ ) {
