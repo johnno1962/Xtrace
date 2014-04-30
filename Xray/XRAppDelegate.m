@@ -17,9 +17,9 @@
     assert(i1==11);
     assert(i2==22);
 #ifndef __LP64__
-    assert(a.origin.x=99);
+    assert(a.origin.x==99);
 #else
-    assert(a.origin.y=99); // frame problem with CGRect on 64 bits
+    assert(a.origin.y==99); // frame problem with CGRect on 64 bit builds
 #endif
 }
 
@@ -28,9 +28,9 @@
     assert(i1==1);
     assert(i2==2);
 #ifndef __LP64__
-    assert(a.origin.x=99);
+    assert(a.origin.x==99);
 #else
-    assert(a.origin.y=99); // frame problem with CGRect on 64 bits
+    assert(a.origin.y==99); // frame problem with CGRect on 64 bit builds
 #endif
 }
 
@@ -78,7 +78,6 @@ static NSString *expect;
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
     // Override point for customization after application launch.
-    [Xtrace dumpClass:[UITableView class]];
 
     // the various options..
     //[Xtrace methodFilter:"^set"];
@@ -95,6 +94,16 @@ static NSString *expect;
     // this exploratory code has rather evolved into the unit tests...
 
     [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) callback:@selector(before:simple:i:i:)];
+    [Xtrace forClass:[XRAppDelegate class] before:@selector(simple:i:i:) callbackBlock:^( XRAppDelegate *obj, SEL sel, CGRect a, int i1, int i2 ){
+        NSLog( @"%s %p %p %p %p %p %d %d %@", sel_getName(sel), &obj, &sel, &a, &i1, &i2, i1, i2, NSStringFromCGRect(*&a) );
+        assert(i1==11);
+        assert(i2==22);
+#ifndef __LP64__
+        assert(a.origin.x==99);
+#else
+        assert(a.origin.y==99); // frame problem with CGRect on 64 bit builds
+#endif
+    }];
 
     CGRect a = {{111,222},{333,444}};
     a.origin.x= 99;
@@ -122,11 +131,11 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
-    [[UIView class] beforeSelector:@selector(sizeToFit) callBlock:^( UILabel *label ) {
-        NSLog( @"%@ sizeToFit before: %@", label, NSStringFromCGRect(label.frame) );
+    [[UIView class] beforeSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
+        NSLog( @"%@ %s before: %@", label, sel_getName(sel), NSStringFromCGRect(label.frame) );
     }];
-    [[UIView class] afterSelector:@selector(sizeToFit) callBlock:^( UILabel *label ) {
-        NSLog( @"%@ sizeToFit after: %@", label, NSStringFromCGRect(label.frame) );
+    [[UIView class] afterSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
+        NSLog( @"%@ %s after: %@", label, sel_getName(sel), NSStringFromCGRect(label.frame) );
     }];
 
 #ifdef __LP64__
@@ -149,12 +158,17 @@ static NSString *expect;
     expect = @"> frame:111 frame:121 rect:{{99, 222}, {333, 444}} char:222]";
     assert([self frame:111 frame:121 rect:a char:222]==0);
 
+    // thread two "after" callbacks - one to the delegate, one using a block
     [Xtrace forClass:[self class] after:@selector(rect:shift:) callback:@selector(out:obj:rect:shift:)];
+    [Xtrace forClass:[self class] after:@selector(rect:shift:) callbackBlock:^( XRAppDelegate *obj, SEL sel, CGRect out, CGRect rect, int shift ){
+        out.origin.x += shift;
+        return out;
+    }];
 
 #ifndef __LP64__
-    expect = @"> rect:{{99, 222}, {333, 444}} shift:1]";
+    expect = @"> rect:{{99, 222}, {333, 444}} shift:33]";
 #endif
-    assert([self rect:a shift:1].origin.x==a.origin.x+1);
+    assert([self rect:a shift:33].origin.x==a.origin.x+66);
 
 #if 0
     // For use with the "XcodeColors" Xcode plugin.
@@ -169,6 +183,8 @@ static NSString *expect;
 
     [Xtrace useColor:XTRACE_FG"100,100,0;"];
 #endif
+
+    [Xtrace dumpClass:[UITableView class]];
 
     // go on then, let's just trace (almost) the lot...
     [Xtrace traceClassPattern:@"^(_?UI|NSIS)" excluding:@"UIKeyboardCandidateUtilities"];
