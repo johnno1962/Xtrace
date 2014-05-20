@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#93 $
+//  $Id: //depot/Xtrace/Xray/Xtrace.mm#96 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -28,13 +28,8 @@
 
 #ifdef DEBUG
 
-#import <Foundation/Foundation.h>
 #import "Xtrace.h"
 #import <map>
-
-#ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
-#import <UIKit/UIKit.h>
-#endif
 
 @implementation NSObject(Xtrace)
 
@@ -137,6 +132,12 @@ static BOOL tracingInstances;
 #endif
 }
 
++ (void)traceInstance:(id)instance class:(Class)aClass {
+    [self traceClass:aClass levels:1];
+    tracedInstances[instance] = 1;
+    tracingInstances = YES;
+}
+
 + (void)traceInstance:(id)instance {
     [self traceClass:[instance class]];
     tracedInstances[instance] = 1;
@@ -166,12 +167,12 @@ static BOOL tracingInstances;
 
 + (void)forClass:(Class)aClass before:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
-              depth:[self depth:aClass]]->beforeBlock = (XTRACE_BIMP)CFRetain( (CFTypeRef)callback );
+              depth:[self depth:aClass]]->beforeBlock = XTRACE_BRIDGE(XTRACE_BIMP)CFRetain( XTRACE_BRIDGE(CFTypeRef)callback );
 }
 
 + (void)forClass:(Class)aClass after:(SEL)sel callbackBlock:callback {
     [self intercept:aClass method:class_getInstanceMethod(aClass, sel) mtype:NULL
-              depth:[self depth:aClass]]->afterBlock = (XTRACE_BIMP)CFRetain( (CFTypeRef)callback );
+              depth:[self depth:aClass]]->afterBlock = XTRACE_BRIDGE(XTRACE_BIMP)CFRetain( XTRACE_BRIDGE(CFTypeRef)callback );
 }
 
 + (XTRACE_VIMP)forClass:(Class)aClass intercept:(SEL)sel callback:(SEL)callback {
@@ -264,10 +265,8 @@ static const char *noColor = "", *traceColor = noColor;
                          [nameStr isEqualToString:@"dealloc"] || [nameStr hasPrefix:@"_dealloc"]*/ )
                     ; // best avoided
 
-#if defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && !defined(INJECTION_LOADER)
-                else if ( aClass == [UIView class] && [nameStr isEqualToString:@"drawRect:"] )
+                else if ( aClass == NSClassFromString(@"UIView") && [nameStr isEqualToString:@"drawRect:"] )
                     ; // no idea why this is a problem...
-#endif
 
                 else if (params.includeProperties || !class_getProperty( aClass, name ))
                     [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
@@ -935,9 +934,9 @@ switch ( depth%IMPL_COUNT ) { \
     return profile;
 }
 
-+ (void)dumpProfile:(unsigned int)count dp:(int)decimalPlaces {
++ (void)dumpProfile:(unsigned)count dp:(int)decimalPlaces {
     NSArray *profile = [self profile];
-    for ( unsigned int i=0 ; i<count && i<[profile count] ; i++ ) {
+    for ( unsigned i=0 ; i<count && i<[profile count] ; i++ ) {
         Xtrace *trace = [profile objectAtIndex:i];
         if ( !trace->info->color )
             trace->info->color = noColor;

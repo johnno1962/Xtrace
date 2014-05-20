@@ -131,10 +131,10 @@ static NSString *expect;
     [Xtrace forClass:[UILabel class] after:@selector(setText:) callback:@selector(label:setText:)];
     [Xtrace forClass:[UILabel class] after:@selector(text) callback:@selector(out:labelText:)];
 
-    [[UIView class] beforeSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
+    [UIView beforeSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
         NSLog( @"%@ %s before: %@", label, sel_getName(sel), NSStringFromCGRect(label.frame) );
     }];
-    [[UIView class] afterSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
+    [UIView afterSelector:@selector(sizeToFit) callBlock:^( UILabel *label, SEL sel ) {
         NSLog( @"%@ %s after: %@", label, sel_getName(sel), NSStringFromCGRect(label.frame) );
     }];
 
