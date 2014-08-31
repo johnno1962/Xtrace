@@ -68,6 +68,10 @@ switches to instance viewing of a specific UILabel when the detail view loads.
 Display of method arguments is now on by default, but if you have problems:
 
 	[Xtrace showArguments:NO];
+
+You can display the calling function on entry by setting:
+
+    [Xtrace showCaller:YES];
 	
 You should also be able to switch to log the "description" of all values using:
 
@@ -103,6 +107,8 @@ A rudimentary profiling interface is also available:
     0.593577/53   [CALayer layoutSublayers]
     0.592025/53   [UIView layoutSublayersOfLayer:]
     ...
+
+### Aspect oriented features
 
 Finally, callbacks can also be registered on a delegate to be called before or after any method is called:
 
