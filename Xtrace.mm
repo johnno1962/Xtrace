@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.mm#97 $
+//  $Id: //depot/Xtrace/Xtrace.mm#1 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -76,11 +76,11 @@ static id delegate;
 
 + (void)setDelegate:aDelegate {
     delegate = aDelegate;
-    params.logToDelegate = [delegate respondsToSelector:@selector(xtrace:forInstance:)];
+    params.logToDelegate = [delegate respondsToSelector:@selector(xtrace:forInstance:indent:)];
 }
 
 // callback delegate can implement as instance method
-+ (void)xtrace:(NSString *)trace forInstance:(void *)obj {
++ (void)xtrace:(NSString *)trace forInstance:(void *)obj indent:(int)indent {
     printf( "| %s\n", [trace UTF8String] );
 }
 
@@ -236,6 +236,7 @@ static const char *noColor = "", *traceColor = noColor;
 }
 
 + (void)traceClass:(Class)aClass mtype:(const char *)mtype levels:(int)levels {
+
     if ( !tracedClasses[aClass] )
         tracedClasses[aClass] = traceColor;
     swizzledClasses[aClass] = NO;
@@ -244,7 +245,9 @@ static const char *noColor = "", *traceColor = noColor;
     if ( !excludeMethods )
         [self excludeMethods:@XTRACE_EXCLUSIONS];
 
+    NSMutableString *nameStr = [NSMutableString new];
     int depth = [self depth:aClass];
+
     for ( int l=0 ; l<levels ; l++ ) {
 
         if ( !swizzledClasses[aClass] && excludedClasses.find(aClass) == excludedClasses.end() ) {
@@ -255,9 +258,9 @@ static const char *noColor = "", *traceColor = noColor;
            for( unsigned i=0; methods && i<mc; i++ ) {
                 const char *type = method_getTypeEncoding(methods[i]);
                 const char *name = sel_getName(method_getName(methods[i]));
-                NSString *nameStr = [NSString stringWithUTF8String:name];
+                [nameStr appendFormat:@"%s", name];
 
-               if ( ((includeMethods && ![self string:nameStr matches:includeMethods]) ||
+                if ( ((includeMethods && ![self string:nameStr matches:includeMethods]) ||
                       (excludeMethods && [self string:nameStr matches:excludeMethods])) )
                    ;//NSLog( @"Xtrace: filters exclude: %s[%s %s] %s", mtype, className, name, type );
 
@@ -269,11 +272,15 @@ static const char *noColor = "", *traceColor = noColor;
                          [nameStr isEqualToString:@"dealloc"] || [nameStr hasPrefix:@"_dealloc"]*/ )
                     ; // best avoided
 
-                else if ( aClass == NSClassFromString(@"UIView") && [nameStr isEqualToString:@"drawRect:"] )
+#ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
+                else if ( aClass == [UIView class] && [nameStr isEqualToString:@"drawRect:"] )
                     ; // no idea why this is a problem...
+#endif
 
                 else if (params.includeProperties || !class_getProperty( aClass, name ))
                     [self intercept:aClass method:methods[i] mtype:mtype depth:depth];
+
+               [nameStr setString:@""];
             }
 
             swizzledClasses[aClass] = YES;
@@ -438,6 +445,10 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
     Class implementingClass = aClass;
     aClass = object_getClass( info->obj );
 
+    static char KVO_prefix[] = "NSKVONotifying_";
+    while ( aClass && strncmp( class_getName(aClass), KVO_prefix, sizeof(KVO_prefix)-1 ) == 0 )
+        aClass = class_getSuperclass(aClass);
+
     // add custom filtering of logging here..
     if ( !state.describing && orig.mtype &&
         (!tracingInstances ? tracedClasses[aClass] != nil :
@@ -454,11 +465,11 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         if ( params.showCaller && state.indent == 0 &&
             (symbol = [Xtrace callerFor:orig.caller]) && symbol[0] != '<' ) {
             [args appendFormat:@"From: %s", symbol];
-            [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj];
+            [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj indent:-2];
             [args setString:@""];
         }
 
-        if ( orig.color[0] )
+        if ( orig.color && orig.color[0] )
             [args appendFormat:@"%s", orig.color];
 
         if ( orig.mtype[0] == '+' )
@@ -492,9 +503,9 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         [args appendString:@"]"];
         if ( params.showSignature )
             [args appendFormat:@" %.100s %p", orig.type, orig.original];
-        if ( orig.color[0] )
+        if ( orig.color && orig.color[0] )
             [args appendString:@"\033[;"];
-        [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj];
+        [params.logToDelegate ? delegate : [Xtrace class] xtrace:args forInstance:orig.lastObj indent:state.indent];
     }
 
     orig.stats.entered = [NSDate timeIntervalSinceReferenceDate];
@@ -515,8 +526,9 @@ static void returning( struct _xtrace_info *orig, ... ) {
         [val appendFormat:@"%s%*s-> ", orig->color, state.indent, ""];
         if ( formatValue(orig->type, NULL, &argp, val) ) {
             [val appendFormat:@" (%s)", orig->name];
-            if ( orig->color[0] ) [val appendString:@"\033[;"];
-            [params.logToDelegate ? delegate : [Xtrace class] xtrace:val forInstance:orig->lastObj];
+            if ( orig->color && orig->color[0] )
+                [val appendString:@"\033[;"];
+            [params.logToDelegate ? delegate : [Xtrace class] xtrace:val forInstance:orig->lastObj indent:-1];
         }
     }
 }
@@ -612,6 +624,9 @@ static _type XTRACE_RETAINED xtrace_t( XTRACE_UNSAFE id obj, SEL sel, ARG_DEFS )
 }
 
 + (struct _xtrace_info *)intercept:(Class)aClass method:(Method)method mtype:(const char *)mtype depth:(int)depth {
+    if ( !method )
+        NSLog( @"Xtrace: unknown method" );
+
     SEL sel = method_getName(method);
     const char *name = sel_getName(sel);
     const char *className = class_getName(aClass);
@@ -739,7 +754,7 @@ switch ( depth%IMPL_COUNT ) { \
 
 #if 1 // original version using information in method type encoding
 
-+ (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
++ (int)originalExtractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
     int frameLen = -1;
 
     for ( int i=0 ; i<maxargs ; i++ ) {
@@ -764,8 +779,7 @@ switch ( depth%IMPL_COUNT ) { \
     return -1;
 }
 
-#else
-#if 1 // alternate "NSGetSizeAndAlignment()" version
+#else // alternate "NSGetSizeAndAlignment()" version
 
 + (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
     NSUInteger size, align, offset = 0;
@@ -793,20 +807,23 @@ switch ( depth%IMPL_COUNT ) { \
     return -1;
 }
 
-#else // Extract types using NSMethodSignature - gives unsuppported type error
+#endif // Extract types using NSMethodSignature - can give unsuppported type error
 
 + (int)extractOffsets:(const char *)type into:(struct _xtrace_arg *)args maxargs:(int)maxargs {
-    NSMethodSignature *info = [NSMethodSignature signatureWithObjCTypes:type];
-    int acount = (int)[info numberOfArguments];
+    @try {
+        NSMethodSignature *sig = [NSMethodSignature signatureWithObjCTypes:type];
+        int acount = (int)[sig numberOfArguments];
 
-    for ( int i=2 ; i<acount ; i++ )
-        args[i-2].type = [info getArgumentTypeAtIndex:i];
+        for ( int i=2 ; i<acount ; i++ )
+            args[i-2].type = [sig getArgumentTypeAtIndex:i];
 
-    return acount-2;
+        return acount-2;
+    }
+    @catch ( NSException *e ) {
+        NSLog( @"Xtrace: exception %@ on signature: %s", e, type );
+        [self originalExtractOffsets:type into:args maxargs:maxargs];
+    }
 }
-
-#endif
-#endif
 
 + (void)dumpClass:(Class)aClass {
     NSMutableString *str = [NSMutableString string];
@@ -824,7 +841,7 @@ switch ( depth%IMPL_COUNT ) { \
     objc_property_t *props = class_copyPropertyList(aClass, &c);
     for ( unsigned i=0 ; i<c ; i++ ) {
         const char *attrs = property_getAttributes(props[i]);
-        [str appendFormat:@"@property () %@ %s // %s\n", [self xtype:attrs+1], property_getName(props[i]), attrs];
+        [str appendFormat:@"@property () %@ %s; // %s\n", [self xtype:attrs+1], property_getName(props[i]), attrs];
     }
     free( props );
 
@@ -856,7 +873,7 @@ switch ( depth%IMPL_COUNT ) { \
             [str appendFormat:@"(%@)a%d ", [self xtype:args[a].type], a];
         }
 
-        [str appendFormat:@" // %s\n", type];
+        [str appendFormat:@"; // %s\n", type];
     }
 
     free( methods );

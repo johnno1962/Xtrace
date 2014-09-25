@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xray/Xtrace.h#39 $
+//  $Id: //depot/Xtrace/Xtrace.h#1 $
 //
 //  Class to intercept messages sent to a class or object.
 //  Swizzles generic logging implemntation in place of the
@@ -128,6 +128,11 @@ struct _xtrace_info {
 // stop tacing ""
 - (void)notrace;
 
+@end
+
+// logging delegate
+@protocol XtraceDelegate
+- (void)xtrace:(NSString *)trace forInstance:(void *)obj indent:(int)indent;
 @end
 
 // implementing class

@@ -63,7 +63,7 @@
 
 static NSString *expect;
 
-+ (void)xtrace:(NSString *)trace forInstance:(void *)obj {
++ (void)xtrace:(NSString *)trace forInstance:(void *)obj indent:(int)indent {
     printf( "| %s\n", [trace UTF8String] );
     if ( expect && ![trace hasPrefix:@"From:"] ) {
         assert( [trace rangeOfString:expect].location != NSNotFound );
