@@ -24,6 +24,7 @@ To use, add Xtrace.{h,mm} to your project and add an import of Xtrace.h to your
 project's ".pch" file so you can access its methods from anywhere in your project.
 There is a simple category based shortcut interface to start tracing:
 
+``` objc
 	[MyClass xtrace]; // to trace all calls to instances of a class
 	// this will intercept all methods of any superclasses as well
     // but only for instances of the class that has been traced (v2.1)
@@ -31,8 +32,12 @@ There is a simple category based shortcut interface to start tracing:
 	[instance xtrace]; // to trace all calls to a particular instance.
 	// multiple instances can by traced, use "notrace" to stop tracing
     // instance tracing takes precedence over class based filtering.
+
+    [Xtrace traceBundleContainingClass:myClass];
+    // trace your entire app's classes or those of an embedded framework
     
     [Xtrace traceClassPattern:@"^UI" excluding:nil]; // trace all of UIkit
+```
 
 If you have the [XcodeColors](https://github.com/johnno1962/XcodeColors) plugin
 installed you can now color traces by selector, class or group of classes:

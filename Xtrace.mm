@@ -7,7 +7,7 @@
 //
 //  Repo: https://github.com/johnno1962/Xtrace
 //
-//  $Id: //depot/Xtrace/Xtrace.mm#2 $
+//  $Id: //depot/Xtrace/Xtrace.mm#8 $
 //
 //  The above copyright notice and this permission notice shall be
 //  included in all copies or substantial portions of the Software.
@@ -28,12 +28,28 @@
 
 #ifdef DEBUG
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wcstring-format-directive"
+#pragma clang diagnostic ignored "-Wgnu-conditional-omitted-operand"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wobjc-interface-ivars"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wdirect-ivar-access"
+#pragma clang diagnostic ignored "-Wclass-varargs"
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wpadded"
+
 #import "Xtrace.h"
 #import <map>
 
 #ifdef __IPHONE_OS_VERSION_MIN_REQUIRED
 #import <UIKit/UIKit.h>
 #endif
+
+#import <mach-o/getsect.h>
+#import <dlfcn.h>
 
 @implementation NSObject(Xtrace)
 
@@ -69,10 +85,16 @@
 
 @implementation Xtrace
 
-// Not sure this is C..
-static struct { BOOL showCaller, showActual = YES, showReturns = YES, showArguments = YES,
+// Not sure this is even C..
+static struct { BOOL showCaller = YES, showActual = YES, showReturns = YES, showArguments = YES,
     showSignature = NO, includeProperties = NO, describeValues = NO, logToDelegate; } params;
+static int indentScale = 2;
 static id delegate;
+
+template <class _M,typename _K>
+static inline bool exists( const _M &map, const _K &key ) {
+    return map.find(key) != map.end();
+}
 
 + (void)setDelegate:aDelegate {
     delegate = aDelegate;
@@ -111,9 +133,9 @@ static id delegate;
 static std::map<XTRACE_UNSAFE Class,std::map<SEL,struct _xtrace_info> > originals;
 static std::map<XTRACE_UNSAFE Class,const char *> tracedClasses; // trace color
 static std::map<XTRACE_UNSAFE Class,BOOL> swizzledClasses, excludedClasses;
+static std::map<XTRACE_UNSAFE Class,int> tracingInstances;
 static std::map<XTRACE_UNSAFE id,BOOL> tracedInstances;
 static std::map<SEL,const char *> selectorColors;
-static BOOL tracingInstances;
 
 + (void)dontTrace:(Class)aClass {
     Class metaClass = object_getClass(aClass);
@@ -126,9 +148,15 @@ static BOOL tracingInstances;
 }
 
 + (void)traceClass:(Class)aClass levels:(int)levels {
+    if ( aClass == [Xtrace class] )
+        return;
+    if ( aClass == [NSObject class] ) {
+        NSLog( @"Xtrace: Tracing NSObject will not trace all classes" );
+        return;
+    }
 #ifdef __arm64__
-// make this into #warning to switch between the simulator and a device more easily
-#error Xtrace will not work on an ARM64 build. Rebuild for $(ARCHS_STANDARD_32_BIT).
+    #warning Xtrace will not work on an ARM64 build. Rebuild for $(ARCHS_STANDARD_32_BIT).
+    NSLog( @"Xtrace will not work on an ARM64 build. Rebuild for $(ARCHS_STANDARD_32_BIT)." );
 #else
     Class metaClass = object_getClass(aClass);
     [self traceClass:metaClass mtype:"+" levels:levels];
@@ -136,22 +164,50 @@ static BOOL tracingInstances;
 #endif
 }
 
++ (void)traceBundleContainingClass:(Class)aClass {
+    Dl_info info;
+    if ( !dladdr( XTRACE_BRIDGE(const void *)(aClass ?: self), &info ) )
+        NSLog( @"Xtrace: Could not find load address" );
+
+#ifndef __LP64__
+    uint32_t size = 0;
+    char *referencesSection = getsectdatafromheader((struct mach_header *)info.dli_fbase,
+                                                    "__DATA", "__objc_classlist", &size );
+#else
+    uint64_t size = 0;
+    char *referencesSection = getsectdatafromheader_64((struct mach_header_64 *)info.dli_fbase,
+                                                       "__DATA", "__objc_classlist", &size );
+#endif
+
+    if ( referencesSection )
+    {
+        Class *classReferences = (Class *)(void *)((char *)info.dli_fbase+((uintptr_t)referencesSection&0xffffffff));
+
+        for ( unsigned long i=0 ; i<size/sizeof *classReferences ; i++ )
+            [self traceClass:classReferences[i] levels:1];
+    }
+    else
+        NSLog( @"Xtrace: Could not locate referencesSection - no classes to trace" );
+}
+
 + (void)traceInstance:(id)instance class:(Class)aClass {
     [self traceClass:aClass levels:1];
-    tracedInstances[instance] = 1;
-    tracingInstances = YES;
+    tracedInstances[instance] = YES;
+    tracingInstances[aClass]++;
 }
 
 + (void)traceInstance:(id)instance {
-    [self traceClass:[instance class]];
-    tracedInstances[instance] = 1;
-    tracingInstances = YES;
+    Class aClass = [instance class];
+    [self traceClass:aClass];
+    tracedInstances[instance] = YES;
+    tracingInstances[aClass]++;
 }
 
 + (void)notrace:(id)instance {
     auto i = tracedInstances.find(instance);
     if ( i != tracedInstances.end() )
         tracedInstances.erase(i);
+
 }
 
 + (void)forClass:(Class)aClass before:(SEL)sel callback:(SEL)callback {
@@ -245,12 +301,13 @@ static const char *noColor = "", *traceColor = noColor;
     if ( !excludeMethods )
         [self excludeMethods:@XTRACE_EXCLUSIONS];
 
+    Class nsObject = [NSObject class], nsObjectMeta = object_getClass( nsObject );
     NSMutableString *nameStr = [NSMutableString new];
     int depth = [self depth:aClass];
 
     for ( int l=0 ; l<levels ; l++ ) {
 
-        if ( !swizzledClasses[aClass] && excludedClasses.find(aClass) == excludedClasses.end() ) {
+        if ( !swizzledClasses[aClass] && !exists( excludedClasses, aClass ) ) {
             unsigned mc = 0;
             const char *className = class_getName(aClass);
             Method *methods = class_copyMethodList(aClass, &mc);
@@ -267,7 +324,8 @@ static const char *noColor = "", *traceColor = noColor;
                 else if ( (excludeTypes && [self string:[NSString stringWithUTF8String:type] matches:excludeTypes]) )
                     NSLog( @"Xtrace: type filter excludes: %s[%s %s] %s", mtype, className, name, type );
 
-                else if ( name[0] == '.' || [nameStr isEqualToString:@"description"] ||
+                else if ( name[0] == '.' ||
+                         [nameStr isEqualToString:@"description"] || [nameStr hasPrefix:@"_description"] ||
                          [nameStr isEqualToString:@"retain"] || [nameStr isEqualToString:@"release"] /*||
                          [nameStr isEqualToString:@"dealloc"] || [nameStr hasPrefix:@"_dealloc"]*/ )
                     ; // best avoided
@@ -288,7 +346,7 @@ static const char *noColor = "", *traceColor = noColor;
         }
 
         aClass = class_getSuperclass(aClass);
-        if ( !--depth ) // don't trace NSObject
+        if ( !--depth || aClass == nsObject || aClass == nsObjectMeta ) // don't trace NSObject
             break;
     }
 }
@@ -318,7 +376,7 @@ static const char *noColor = "", *traceColor = noColor;
 + (const char *)callerFor:(void *)caller {
     static std::map<void *,const char *> callers;
 
-    if ( callers.find(caller) == callers.end() ) {
+    if ( !exists( callers, caller ) ) {
         Dl_info info;
         if ( dladdr(caller, &info) && info.dli_sname )
             callers[caller] = strdup(info.dli_sname);
@@ -373,7 +431,9 @@ static BOOL formatValue( const char *type, void *valptr, va_list *argp, NSMutabl
             return YES;
         case '#': case '@': {
             XTRACE_UNSAFE id obj = va_arg(*argp,XTRACE_UNSAFE id);
-            if ( params.describeValues ) {
+            if ( [obj isKindOfClass:[NSString class]] )
+                [args appendFormat:@"@\"%@\"", obj];
+            else if ( params.describeValues ) {
                 state.describing = YES;
                 [args appendString:obj?[obj description]:@"<nil>"];
                 state.describing = NO;
@@ -429,7 +489,7 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
     Class aClass = object_getClass( info->obj );
     const char *className = class_getName( aClass );
 
-    while ( aClass && (originals[aClass].find(sel) == originals[aClass].end() ||
+    while ( aClass && (!exists( originals[aClass], sel ) ||
                        originals[aClass][sel].depth != info->depth) )
         aClass = class_getSuperclass( aClass );
 
@@ -442,18 +502,19 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
         orig.original = (XTRACE_VIMP)nullImpl;
     }
 
-    Class implementingClass = aClass;
-    aClass = object_getClass( info->obj );
-
     static char KVO_prefix[] = "NSKVONotifying_";
     while ( aClass && strncmp( class_getName(aClass), KVO_prefix, sizeof(KVO_prefix)-1 ) == 0 )
         aClass = class_getSuperclass(aClass);
 
+    Class implementingClass = aClass;
+    aClass = object_getClass( info->obj );
+
     // add custom filtering of logging here..
     if ( !state.describing && orig.mtype &&
-        (!tracingInstances ? tracedClasses[aClass] != nil :
-         tracedInstances.find(info->obj) != tracedInstances.end()) )
-        orig.color = selectorColors.find(sel) != selectorColors.end() ?
+        (exists( tracingInstances, aClass ) ?
+         exists( tracedInstances, info->obj ) :
+         tracedClasses[aClass] != nil) )
+        orig.color = exists( selectorColors, sel ) ?
                 selectorColors[sel] : tracedClasses[aClass];
     else
         orig.color = NULL;
@@ -474,10 +535,10 @@ static struct _xtrace_info &findOriginal( struct _xtrace_depth *info, SEL sel, .
 
         if ( orig.mtype[0] == '+' )
             [args appendFormat:@"%*s%s[%s",
-             state.indent++, "", orig.mtype, className];
+             state.indent++*indentScale, "", orig.mtype, className];
         else
             [args appendFormat:@"%*s%s[<%s %p>",
-             state.indent++, "", orig.mtype, className, info->obj];
+             state.indent++*indentScale, "", orig.mtype, className, info->obj];
 
         if ( params.showActual && implementingClass != aClass )
             [args appendFormat:@"/%s", class_getName(implementingClass)];
@@ -523,7 +584,7 @@ static void returning( struct _xtrace_info *orig, ... ) {
 
     if ( orig->color && params.showReturns ) {
         NSMutableString *val = [NSMutableString string];
-        [val appendFormat:@"%s%*s-> ", orig->color, state.indent, ""];
+        [val appendFormat:@"%s%*s-> ", orig->color, state.indent*indentScale, ""];
         if ( formatValue(orig->type, NULL, &argp, val) ) {
             [val appendFormat:@" (%s)", orig->name];
             if ( orig->color && orig->color[0] )
@@ -975,4 +1036,6 @@ switch ( depth%IMPL_COUNT ) { \
 }
 
 @end
+
+#pragma clang diagnostic pop
 #endif

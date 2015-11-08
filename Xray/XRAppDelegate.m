@@ -124,7 +124,7 @@ static NSString *expect;
 
     [Xtrace forClass:[self class] after:@selector(msg:) callback:@selector(after:obj:msg:)];
 
-    expect = @"> msg:<__NSCFConstantString 0x";
+    expect = @"> msg:@\"hello world\"]";
     assert([[self msg:@"hello world"] isEqual:@"hello world, hello aspect"]);
     NSLog( @"Caller: %s", [Xtrace callerFor:[self class] sel:@selector(msg:)] );
 

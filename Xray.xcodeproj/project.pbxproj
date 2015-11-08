@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		BB0594281BEF986B00AC6575 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = BB0594271BEF986B00AC6575 /* LaunchScreen.storyboard */; };
 		BB0D854119D44EFD00E2C2C3 /* Xtrace.mm in Sources */ = {isa = PBXBuildFile; fileRef = BB0D854019D44EFD00E2C2C3 /* Xtrace.mm */; };
 		BB4D8E6A18C12C6700A51378 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB4D8E6918C12C6700A51378 /* Foundation.framework */; };
 		BB4D8E6C18C12C6700A51378 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BB4D8E6B18C12C6700A51378 /* CoreGraphics.framework */; };
@@ -36,6 +37,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		BB0594271BEF986B00AC6575 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		BB0D853F19D44EFD00E2C2C3 /* Xtrace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Xtrace.h; sourceTree = SOURCE_ROOT; };
 		BB0D854019D44EFD00E2C2C3 /* Xtrace.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = Xtrace.mm; sourceTree = SOURCE_ROOT; };
 		BB4D8E6618C12C6700A51378 /* Xray.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Xray.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -89,6 +91,7 @@
 		BB4D8E5D18C12C6600A51378 = {
 			isa = PBXGroup;
 			children = (
+				BB761E1018C3DB4800990A16 /* README.md */,
 				BB4D8E6F18C12C6700A51378 /* Xray */,
 				BB4D8E9118C12C6700A51378 /* XrayTests */,
 				BB4D8E6818C12C6700A51378 /* Frameworks */,
@@ -124,6 +127,7 @@
 				BB4D8E7818C12C6700A51378 /* XRAppDelegate.h */,
 				BB4D8E7918C12C6700A51378 /* XRAppDelegate.m */,
 				BB4D8E7B18C12C6700A51378 /* Main.storyboard */,
+				BB0594271BEF986B00AC6575 /* LaunchScreen.storyboard */,
 				BB4D8E7E18C12C6700A51378 /* XRMasterViewController.h */,
 				BB4D8E7F18C12C6700A51378 /* XRMasterViewController.m */,
 				BB4D8E8118C12C6700A51378 /* XRDetailViewController.h */,
@@ -137,7 +141,6 @@
 		BB4D8E7018C12C6700A51378 /* Supporting Files */ = {
 			isa = PBXGroup;
 			children = (
-				BB761E1018C3DB4800990A16 /* README.md */,
 				BB4D8E7118C12C6700A51378 /* Xray-Info.plist */,
 				BB4D8E7218C12C6700A51378 /* InfoPlist.strings */,
 				BB4D8E7518C12C6700A51378 /* main.m */,
@@ -242,6 +245,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BB4D8E8518C12C6700A51378 /* Images.xcassets in Resources */,
+				BB0594281BEF986B00AC6575 /* LaunchScreen.storyboard in Resources */,
 				BB4D8E7418C12C6700A51378 /* InfoPlist.strings in Resources */,
 				BB4D8E7D18C12C6700A51378 /* Main.storyboard in Resources */,
 			);
