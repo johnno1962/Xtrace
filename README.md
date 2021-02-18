@@ -1,5 +1,7 @@
 # ![Icon](http://injectionforxcode.johnholdsworth.com/stethoscope.gif)  Xtrace
 
+Note: This project has been superseeded by the more rigourous [SwiftTrace](https://github.com/johnno1962/SwiftTrace).
+
 ### Trace Objective-C method calls by class or instance
 
 Xtrace is a header Xtrace.h and a C++ implementation file Xtrace.mm that allows
